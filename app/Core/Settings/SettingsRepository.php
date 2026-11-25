@@ -20,7 +20,7 @@ class SettingsRepository
     private const CACHE_KEY = 'settings.all';
 
     /** Keys stored encrypted in the database. */
-    private const ENCRYPTED = ['mail_password'];
+    private const ENCRYPTED = ['mail_password', 'ai_api_key'];
 
     /** @var array<string, mixed>|null */
     private ?array $loaded = null;

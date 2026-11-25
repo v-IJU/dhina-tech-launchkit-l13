@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Settings\Support;
 
+use App\Modules\Ai\Support\AiSettings;
+
 /**
  * Every setting shown on the Settings page, grouped into tabs.
  * To add a setting: add a line here, then read it anywhere with setting('key').
@@ -132,6 +134,16 @@ class SettingDefinitions
                     'error_notify_admins' => ['type' => 'toggle', 'label' => 'Bell notification for new errors', 'rules' => ['boolean'], 'default' => true, 'hint' => 'For everyone with the "Errors & failed jobs: view" permission. Once per error per hour.'],
                     'error_alert_email' => ['type' => 'email', 'label' => 'Email new errors to', 'rules' => ['nullable', 'email', 'max:255'], 'default' => '', 'hint' => 'A developer or support address. Empty = no emails.'],
                     'error_log_days' => ['type' => 'number', 'label' => 'Keep errors for (days)', 'rules' => ['required', 'integer', 'between:1,365'], 'default' => 30, 'hint' => 'Counted from the last time the error happened.'],
+                ],
+            ],
+            'ai' => [
+                'module' => 'ai',
+                'label' => 'AI', 'icon' => 'bi-robot', 'description' => 'AI clients (MCP) and the in-panel assistant. See Admin > AI & MCP for how to connect.',
+                'fields' => [
+                    'ai_mcp_enabled' => ['type' => 'toggle', 'label' => 'Allow AI clients (MCP)', 'rules' => ['boolean'], 'default' => false, 'span' => true, 'hint' => 'Lets Claude, ChatGPT, Cursor… connect at /mcp with a user\'s API token. They can only do what that user may do.'],
+                    'ai_provider' => ['type' => 'select', 'label' => 'Assistant AI provider', 'rules' => ['nullable', 'in:'.implode(',', array_keys(AiSettings::PROVIDERS))], 'options' => ['' => 'Off'] + AiSettings::PROVIDERS, 'default' => ''],
+                    'ai_model' => ['type' => 'text', 'label' => 'Model', 'rules' => ['nullable', 'string', 'max:100'], 'default' => '', 'hint' => 'Empty = the provider\'s default model (config/ai.php).'],
+                    'ai_api_key' => ['type' => 'password', 'label' => 'API key', 'rules' => ['nullable', 'string', 'max:500'], 'hint' => 'Stored encrypted. Empty = use the key from .env (OPENAI_API_KEY, ANTHROPIC_API_KEY…).'],
                 ],
             ],
             'billing' => [

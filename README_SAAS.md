@@ -230,6 +230,10 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 
 Webhook URLs: `https://yourapp.com/billing/webhooks/razorpay` and `/billing/webhooks/stripe`. Locally they need a tunnel (`cloudflared tunnel --url http://localhost:8080` or `ngrok http 8080`). Without gateways: **Record a payment** on the tenant page (bank transfer, UPI, cheque).
 
+## 8b. AI & MCP per tenant
+
+**AI & MCP** is a plan module (Enterprise by default). A tenant with it turns it on under its own Settings → AI, uses its own AI key (or falls back to yours in `.env`), and connects AI clients to `https://acme.yourapp.com/mcp` with tokens from its own panel. Details: `AI.md`.
+
 ## 9. Scheduled jobs
 
 | Command | When | What |

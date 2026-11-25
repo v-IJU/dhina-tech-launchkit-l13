@@ -38,9 +38,9 @@ class PlanSeeder extends Seeder
             [
                 'slug' => 'enterprise', 'name' => 'Enterprise', 'description' => 'Everything, without limits.',
                 'price_monthly' => 699900, 'price_yearly' => 6999000, 'trial_days' => 30, 'sort_order' => 3,
-                'modules' => [...$website, 'blog', 'customers'],
+                'modules' => [...$website, 'blog', 'customers', 'ai'],
                 'limits' => ['users' => null, 'customers' => null, 'storage_mb' => null],
-                'features' => ['Everything in Business', 'Unlimited users and customers', 'Unlimited storage', 'Own domain', 'Dedicated support'],
+                'features' => ['Everything in Business', 'AI assistant + connect Claude/ChatGPT (MCP)', 'Unlimited users and customers', 'Unlimited storage', 'Own domain', 'Dedicated support'],
             ],
         ];
 

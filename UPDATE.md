@@ -13,6 +13,7 @@ This update adds these features to an existing project made from the starter. It
 | **Extra permissions per user** | Users → key icon: give one person permissions on top of their role (`users.permissions`) |
 | **Role sidebar preview** | Roles → Add/Edit: live "Sidebar for this role" card while ticking permissions |
 | **Monitoring**          | System → Monitoring → **Error log**, **Failed jobs**, **Log files** (`/admin/logs`); Settings → Monitoring; `/up` and `php artisan health:check` |
+| **AI & MCP** | MCP server at `/mcp` for Claude / ChatGPT / Cursor + in-panel assistant (Laravel AI SDK). Off by default: Settings → AI. See **`AI.md`** |
 | **SaaS mode (optional)** | Off by default, nothing changes until you turn it on. Plans, tenants with their own database, Razorpay + Stripe, signup, console: **`SAAS.md`**. Convert this install: `php artisan tenancy:convert` |
 | **Uploads on S3 or local** | `.env` `UPLOADS_DISK=public` (this server) or `s3` (your bucket). All uploads use the new `uploads` disk |
 | **Production deploy**   | `compose.prod.yaml`, `deploy.sh`, `.env.production.example`, `DEPLOY.md` (new files in the project root) |
@@ -49,7 +50,7 @@ From the project root (Git Bash):
 ```bash
 # 1. install the new packages (Sanctum: API tokens, Scramble: API docs at /docs/api, Log Viewer: /admin/logs,
 #    Tenancy: SaaS mode, S3 driver: uploads/backups on S3)
-docker compose exec app composer require laravel/sanctum:^4.5 dedoc/scramble:^0.13 opcodesio/log-viewer:^3.24 stancl/tenancy:^3.10 league/flysystem-aws-s3-v3:^3.0
+docker compose exec app composer require laravel/sanctum:^4.5 dedoc/scramble:^0.13 opcodesio/log-viewer:^3.24 stancl/tenancy:^3.10 league/flysystem-aws-s3-v3:^3.0 laravel/mcp:^1.3 laravel/ai:^1.4
 
 # 2. new tables and columns: error log, customers, trash (deleted_at), API tokens, sign-in history, translations
 docker compose exec app php artisan migrate
@@ -66,7 +67,7 @@ docker compose run --rm node sh -c "npm install && npm run build"
 # 6. restart the background containers so they load the new code
 docker compose restart horizon scheduler reverb
 
-# 7. check everything: expect "149 passed"
+# 7. check everything: expect "154 passed"
 docker compose exec app php artisan test
 ```
 

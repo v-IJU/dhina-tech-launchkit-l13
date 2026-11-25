@@ -2146,3 +2146,12 @@ The error page has **Find in log files**: it opens the viewer already searching 
 - Scheduled tasks that touch tenant data go through `$perTenant(...)` in `routes/console.php`.
 - Tests: `tests/Feature/SaasTest.php` (central domain `saas.test`, tenant databases as SQLite files) and `ConvertToTenancyTest.php`.
 
+## 31. AI & MCP
+
+Module `app/Modules/Ai`, full guide in `AI.md`. In short:
+
+- `POST /mcp` is a Laravel MCP server (`Mcp/SiteServer.php`) behind `api` + `auth:sanctum` + `module:ai` + `McpAccess` (Settings > AI switch, staff, active, `ai.mcp`). SaaS: per tenant host.
+- Tools extend `Mcp/Tools/SiteTool.php` (`$module`, `$permission`, `$writes`, `run()`) and are listed in `SiteServer::TOOLS`. The same classes feed the Laravel AI SDK assistant (`Agents/SiteAssistant.php` through `Agents/AgentTool.php`).
+- Provider, model and key: Settings > AI (key encrypted, per tenant) or `.env` / `config/ai.php`. Call `AiSettings::apply()` before using an agent in your own code.
+- Tests: `SiteServer::actingAs($user)->tool(Tool::class, [...])`, `SiteAssistant::fake([...])`.
+

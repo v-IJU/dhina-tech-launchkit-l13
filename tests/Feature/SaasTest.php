@@ -383,6 +383,29 @@ class SaasTest extends TestCase
         }
     }
 
+    public function test_mcp_server_per_tenant_and_plan(): void
+    {
+        $tenant = $this->makeTenant('acme', 'enterprise'); // Enterprise includes AI
+        tenancy()->initialize($tenant);
+        app(SettingsRepository::class)->set(['ai_mcp_enabled' => true]);
+        $token = User::query()->where('email', 'owner@acme.com')->firstOrFail()->createToken('claude')->plainTextToken;
+        tenancy()->end();
+
+        $call = fn () => $this->withHeaders(['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json, text/event-stream'])
+            ->postJson($this->host('acme', 'mcp'), ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/call', 'params' => ['name' => 'site-overview', 'arguments' => (object) []]]);
+
+        $call()->assertOk()->assertJsonPath('result.isError', false)->assertSee('Acme Ltd');
+
+        // The token belongs to acme: the central domain doesn't know it.
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders(['Authorization' => 'Bearer '.$token])->postJson('http://saas.test/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'])->assertUnauthorized();
+
+        // Plan without AI → the endpoint doesn't exist for this tenant.
+        $tenant->update(['plan_id' => Plan::query()->where('slug', 'starter')->value('id')]);
+        $this->app['auth']->forgetGuards();
+        $call()->assertNotFound();
+    }
+
     public function test_expired_trial_is_suspended_after_grace(): void
     {
         $tenant = $this->makeTenant('acme');

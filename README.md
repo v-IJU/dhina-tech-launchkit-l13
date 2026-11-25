@@ -5,6 +5,7 @@ Laravel 13 / PHP 8.4 starter that every Dhina Technologies client project begins
 - **Admin panel** (Bootstrap 5): dashboard, users, roles and permissions, extra permissions per user, menu builder, settings, activity log, sign-in history, backups, module manager, monitoring
 - **Business website** (Tailwind CSS 4): pages built from blocks, blog, FAQs, services, sliders, testimonials, contact form, newsletter, SEO, multi-language with RTL
 - **Customer accounts**: website sign-up / sign-in / My account with two-factor, managed from the admin panel
+- **AI & MCP**: an MCP server at `/mcp` so Claude, ChatGPT, Cursor… can work with the site's data, and an in-panel assistant on the Laravel AI SDK. Same tools, same permissions, off by default
 - **REST API** with Sanctum tokens: staff API `/api/v1`, customer app API `/api/v1/shop`, interactive docs at `/docs/api`, versioning (`/api/v2`) built in
 - **Modules**: every feature is a folder in `app/Modules`; `php artisan make:module` generates a full CRUD (list with search, filters, export, import, trash, permissions, menu, optional website pages and API)
 - **Two modes, same code**: **single business** (default) or **SaaS** (many companies, a database each, plans, Razorpay + Stripe billing, signup with trial). One line in `.env` decides.
@@ -22,6 +23,7 @@ No Filament, Livewire or Nova: controllers, Blade views and form requests you ca
 | How the code works and how to change it (deep dive) | [README_DEVELOPER.md](README_DEVELOPER.md) |
 | Full command reference with all options | [README_PROJECT_CMD.md](README_PROJECT_CMD.md) |
 | Build a mobile app / frontend against the API | [API_GUIDE.md](API_GUIDE.md) + `/docs/api` |
+| Connect AI clients (MCP), the AI assistant, add AI tools | [AI.md](AI.md) |
 | How SaaS mode works (DNS, SSL, gateways, convert) | [SAAS.md](SAAS.md) |
 | Put it on a server | [DEPLOY.md](DEPLOY.md) |
 | Update an older copy of the starter | [UPDATE.md](UPDATE.md) |
@@ -164,6 +166,7 @@ app/
     ├── Dashboard  Users  Roles  Settings  Menus  Activity  Media  Inbox      core: always on
     ├── Pages  Blog  Faqs  Services  Sliders  Testimonials                     website content
     ├── Customers                                                              customer accounts + shop API
+    ├── Ai                                                                     MCP server + AI assistant (AI.md)
     ├── Monitoring  Backups  Modules                                           ops tools (SaaS: console only)
     └── Saas  Billing                                                          SaaS mode only
 
@@ -181,7 +184,7 @@ config/starter.php             starter settings: admin path, menu groups, API ve
 config/tenancy.php             SaaS: central domains, tenant databases, what is isolated per tenant
 database/                      core migrations + seeders (DatabaseSeeder, TenantDatabaseSeeder, DemoContentSeeder)
 stubs/module/                  templates for make:module: edit them to change generated code
-tests/Feature/                 149 tests (single business + SaaS + convert)
+tests/Feature/                 154 tests (single business + SaaS + convert + AI)
 docker/                        Dockerfile (dev + production targets), nginx, php.ini
 compose.yaml                   local stack       compose.prod.yaml + deploy.sh   servers
 ```
@@ -382,6 +385,12 @@ Full guide for app developers (sign-in flow, errors, pagination, React Native ex
 - **Scheduler**: `routes/console.php` (`art schedule:list`). Runs in the `scheduler` container.
 - **Errors**: Admin → System → Monitoring → Error log (with alerts), Failed jobs, Log files.
 
+### AI & MCP
+
+Off by default. Turn on under **Settings → AI**, connect clients from **Admin → AI & MCP** (it shows the `/mcp` address and ready-to-paste config for Claude, Cursor, VS Code). Every AI request runs as the user whose token it uses.
+
+To let AI do something new in your module, write one tool class (extend `App\Modules\Ai\Mcp\Tools\SiteTool`, add it to `SiteServer::TOOLS`): it works in MCP clients and the assistant at once. Details and an example: [AI.md](AI.md).
+
 ---
 
 ## 8. Security (already done, keep it that way)
@@ -398,7 +407,7 @@ Full guide for app developers (sign-in flow, errors, pagination, React Native ex
 ## 9. Tests and code quality
 
 ```bash
-art test                                          # 149 tests
+art test                                          # 154 tests
 art test --filter=SaasTest                        # one class
 docker compose exec app ./vendor/bin/pint         # code style (fixes files)
 docker compose exec app ./vendor/bin/phpstan analyse --memory-limit=1G    # Larastan
@@ -445,6 +454,7 @@ HTTPS, RDS, S3, Auto Scaling: [DEPLOY.md](DEPLOY.md). SaaS DNS (wildcard) and ga
 | laravel/sanctum | API tokens |
 | dedoc/scramble | API docs at `/docs/api` |
 | laravel/horizon · laravel/reverb | queues · WebSockets |
+| laravel/mcp · laravel/ai | MCP server at `/mcp` · AI SDK (assistant, agents) |
 | stancl/tenancy | SaaS mode (database per tenant) |
 | spatie/laravel-permission · activitylog · medialibrary · backup · sluggable | roles, audit trail, media, backups, slugs |
 | opcodesio/log-viewer | log files at `/admin/logs` |

@@ -1,0 +1,17 @@
+{
+    "name": "AI & MCP",
+    "slug": "ai",
+    "description": "Connect AI clients (Claude, ChatGPT, Cursor…) to this app through an MCP server, and an in-panel AI assistant (Laravel AI SDK). Both use the same tools and the user's own permissions.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 92,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "ai", "label": "AI & MCP", "actions": ["view", "mcp", "assistant"] }
+    ],
+    "menu": [
+        { "key": "ai", "group": "System", "label": "AI & MCP", "icon": "bi-robot", "route": "admin.ai.index", "permission": "ai.view" }
+    ]
+}
