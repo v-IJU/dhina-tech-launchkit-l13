@@ -15,15 +15,15 @@ alias comp="docker compose exec app composer"
 
 Locally the main domain is `localhost`. Every tenant is a subdomain; `*.localhost` works in Chrome and Firefox without any hosts file. Ports below are the defaults; each copy reads its own from `.env` (`APP_PORT`, `FORWARD_MAILPIT_PORT`, `FORWARD_PMA_PORT`, `FORWARD_DB_PORT`, `REVERB_PORT`, `VITE_PORT`, `COMPOSE_PROJECT_NAME`).
 
-| URL                                 | What                                                                                |
-| ----------------------------------- | ----------------------------------------------------------------------------------- |
-| http://localhost:8080               | Your SaaS website (`/pricing`, `/signup`)                                           |
-| http://localhost:8080/admin         | **SaaS console**: tenants, plans, subscriptions, invoices, your own website content |
-| http://acme.localhost:8080/admin    | Tenant `acme`'s own admin panel                                                     |
-| http://acme.localhost:8080          | Tenant `acme`'s website                                                             |
-| http://localhost:8025               | Mailpit: all emails (trial reminders, welcome, invoices)                            |
-| http://localhost:8082               | phpMyAdmin: `starter_central` + `tenant_*` databases                                |
-| http://acme.localhost:8080/docs/api | API docs; tenant API calls go to `http://acme.localhost:8080/api/v1/...`            |
+| URL | What |
+| --- | --- |
+| http://localhost:8080 | Your SaaS website (`/pricing`, `/signup`) |
+| http://localhost:8080/admin | **SaaS console**: tenants, plans, subscriptions, invoices, your own website content |
+| http://acme.localhost:8080/admin | Tenant `acme`'s own admin panel |
+| http://acme.localhost:8080 | Tenant `acme`'s website |
+| http://localhost:8025 | Mailpit: all emails (trial reminders, welcome, invoices) |
+| http://localhost:8082 | phpMyAdmin: `starter_central` + `tenant_*` databases |
+| http://acme.localhost:8080/docs/api | API docs; tenant API calls go to `http://acme.localhost:8080/api/v1/...` |
 
 `.env` (local):
 
@@ -64,23 +64,23 @@ art tenancy:convert --subdomain=laravelnews --central-domain=localhost --central
 dc restart app horizon scheduler reverb
 ```
 
-| Option               | Meaning                                                             |
-| -------------------- | ------------------------------------------------------------------- |
-| `--subdomain`        | The business's address: `laravelnews.localhost`                     |
-| `--central-domain`   | Main SaaS domain (`localhost` locally, `yourapp.com` on the server) |
-| `--central-database` | New, empty database for plans and tenants (created for you)         |
-| `--domain`           | Its existing own domain, e.g. `www.laravelnews.com` (optional)      |
-| `--plan`             | `starter`, `business` or `enterprise`                               |
+| Option | Meaning |
+| --- | --- |
+| `--subdomain` | The business's address: `laravelnews.localhost` |
+| `--central-domain` | Main SaaS domain (`localhost` locally, `yourapp.com` on the server) |
+| `--central-database` | New, empty database for plans and tenants (created for you) |
+| `--domain` | Its existing own domain, e.g. `www.laravelnews.com` (optional) |
+| `--plan` | `starter`, `business` or `enterprise` |
 
 Sign in to both with your old admin email and password. The converted tenant keeps its database name (`starter`); only new tenants get `tenant_<subdomain>`.
 
 ## 4. Where data lives
 
-| Central (`starter_central`)                             | Tenant (`starter`, `tenant_acme`, …)                     |
-| ------------------------------------------------------- | -------------------------------------------------------- |
+| Central (`starter_central`) | Tenant (`starter`, `tenant_acme`, …) |
+| --- | --- |
 | Plans, tenants, domains, subscriptions, invoices, usage | The company's users, roles, permissions, settings, menus |
-| Your staff (console admins), Error log of all tenants   | Pages, blog, FAQs, customers, media, inbox…              |
-| Your own website content (pages, blog, FAQs…)           | Its own website content                                  |
+| Your staff (console admins), Error log of all tenants | Pages, blog, FAQs, customers, media, inbox… |
+| Your own website content (pages, blog, FAQs…) | Its own website content |
 
 Settings work the same way: Settings in the console = your SaaS website + Billing tab; Settings in a tenant = that tenant only.
 
@@ -128,20 +128,20 @@ Suspended: the website shows "Temporarily unavailable"; the owner can still sign
 
 ## 6. Migrations
 
-| Command                                         | Runs in                         |
-| ----------------------------------------------- | ------------------------------- |
-| `art migrate`                                   | central                         |
-| `art tenants:migrate`                           | every tenant                    |
-| `art tenants:migrate --tenants=acme`            | one tenant                      |
-| `art tenants:run migrate:status --tenants=acme` | what ran in a tenant            |
-| `art tenants:rollback --tenants=acme`           | undo the last batch in a tenant |
+| Command | Runs in |
+| --- | --- |
+| `art migrate` | central |
+| `art tenants:migrate` | every tenant |
+| `art tenants:migrate --tenants=acme` | one tenant |
+| `art tenants:run migrate:status --tenants=acme` | what ran in a tenant |
+| `art tenants:rollback --tenants=acme` | undo the last batch in a tenant |
 
 Where a new migration goes:
 
-| Table for…                             | Folder                                                                              | Runs in                      |
-| -------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
-| A feature tenants use                  | `app/Modules/<Module>/Database/Migrations`                                          | central **and** every tenant |
-| Your SaaS business only (e.g. coupons) | `app/Modules/Saas/Database/Migrations` (+ model with the `CentralConnection` trait) | central only                 |
+| Table for… | Folder | Runs in |
+| --- | --- | --- |
+| A feature tenants use | `app/Modules/<Module>/Database/Migrations` | central **and** every tenant |
+| Your SaaS business only (e.g. coupons) | `app/Modules/Saas/Database/Migrations` (+ model with the `CentralConnection` trait) | central only |
 
 Every tenant database has the tables of **every** module, whatever its plan. Plans only decide what a tenant can use, so upgrading never needs a migration.
 
@@ -161,13 +161,13 @@ art make:module Invoice --fields="title:string,amount:decimal,due_date:date,is_p
 
 In SaaS mode `--migrate` does everything: the table in central **and** every tenant, permissions and menu in all of them.
 
-| `--for=`           | Who gets it                       | Use for                           |
-| ------------------ | --------------------------------- | --------------------------------- |
-| `tenant` (default) | Tenants whose plan includes it    | Features you sell                 |
-| `central`          | Only your console / SaaS website  | Your own internal tools           |
-| `both`             | You and tenants on a plan with it | Website content (like Blog, FAQs) |
+| `--for=` | Who gets it | Use for |
+| --- | --- | --- |
+| `tenant` (default) | Tenants whose plan includes it | Features you sell |
+| `central` | Only your console / SaaS website | Your own internal tools |
+| `both` | You and tenants on a plan with it | Website content (like Blog, FAQs) |
 
-Then **sell it**: console → SaaS → Plans → edit a plan → tick the module → Save. Every tenant on that plan has it on the next page load. One tenant only: SaaS → Tenants → Edit → _Extra modules_.
+Then **sell it**: console → SaaS → Plans → edit a plan → tick the module → Save. Every tenant on that plan has it on the next page load. One tenant only: SaaS → Tenants → Edit → *Extra modules*.
 
 The tenant's super admin sees it at once; other roles need its permissions ticked under the tenant's Roles page.
 
@@ -232,11 +232,11 @@ Webhook URLs: `https://yourapp.com/billing/webhooks/razorpay` and `/billing/webh
 
 ## 9. Scheduled jobs
 
-| Command                                  | When   | What                                              |
-| ---------------------------------------- | ------ | ------------------------------------------------- |
-| `art saas:check-subscriptions`           | hourly | Trial reminders, trial ended, suspend after grace |
-| `art saas:collect-usage [--tenant=acme]` | 04:30  | Users, customers, storage, sign-ins per tenant    |
-| `tenants:run …` jobs                     | daily  | Trash, activity log, tokens, sitemap: per tenant  |
+| Command | When | What |
+| --- | --- | --- |
+| `art saas:check-subscriptions` | hourly | Trial reminders, trial ended, suspend after grace |
+| `art saas:collect-usage [--tenant=acme]` | 04:30 | Users, customers, storage, sign-ins per tenant |
+| `tenants:run …` jobs | daily | Trash, activity log, tokens, sitemap: per tenant |
 
 ```bash
 art schedule:list                 # see them all
@@ -265,17 +265,17 @@ Backups: the built-in backup covers the central database; use RDS automated snap
 
 ## 11. Troubleshooting
 
-| Problem                                                  | Fix                                                                         |
-| -------------------------------------------------------- | --------------------------------------------------------------------------- |
-| "This site doesn't exist"                                | Wrong subdomain, or `CENTRAL_DOMAIN` doesn't match the address you use      |
-| `This cache store does not support tagging`              | `CACHE_STORE=redis`                                                         |
-| `Access denied … CREATE DATABASE` when creating a tenant | GRANT rights to the DB user (section 1)                                     |
-| Tenant login loops back to login                         | Delete cookies for that `*.localhost` address; update to the latest starter |
-| Billing or a new module missing in a tenant's sidebar    | `art tenants:run module:sync`, `art optimize:clear`                         |
-| Tenant shows the console's settings                      | Update to the latest starter (settings are per tenant)                      |
-| Tenant can't reach a page, gets sent to Billing          | It is suspended: Record a payment / Reactivate in the console               |
-| Changed `.env` not picked up                             | `art optimize:clear`, `dc restart app horizon scheduler reverb`             |
-| Error in one tenant                                      | Console → System → Monitoring → Error log (shows the tenant id)             |
+| Problem | Fix |
+| --- | --- |
+| "This site doesn't exist" | Wrong subdomain, or `CENTRAL_DOMAIN` doesn't match the address you use |
+| `This cache store does not support tagging` | `CACHE_STORE=redis` |
+| `Access denied … CREATE DATABASE` when creating a tenant | GRANT rights to the DB user (section 1) |
+| Tenant login loops back to login | Delete cookies for that `*.localhost` address; update to the latest starter |
+| Billing or a new module missing in a tenant's sidebar | `art tenants:run module:sync`, `art optimize:clear` |
+| Tenant shows the console's settings | Update to the latest starter (settings are per tenant) |
+| Tenant can't reach a page, gets sent to Billing | It is suspended: Record a payment / Reactivate in the console |
+| Changed `.env` not picked up | `art optimize:clear`, `dc restart app horizon scheduler reverb` |
+| Error in one tenant | Console → System → Monitoring → Error log (shows the tenant id) |
 
 ## 12. One page
 

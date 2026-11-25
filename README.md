@@ -14,17 +14,17 @@ No Filament, Livewire or Nova: controllers, Blade views and form requests you ca
 
 ### Which document do I read?
 
-| You want to…                                          | Read                                                   |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| Start working on the project                          | **this file**                                          |
-| Every command for a one-company project               | [README_SINGLE_BUSINESS.md](README_SINGLE_BUSINESS.md) |
-| Every command for SaaS mode (tenants, plans, billing) | [README_SAAS.md](README_SAAS.md)                       |
-| How the code works and how to change it (deep dive)   | [README_DEVELOPER.md](README_DEVELOPER.md)             |
-| Full command reference with all options               | [README_PROJECT_CMD.md](README_PROJECT_CMD.md)         |
-| Build a mobile app / frontend against the API         | [API_GUIDE.md](API_GUIDE.md) + `/docs/api`             |
-| How SaaS mode works (DNS, SSL, gateways, convert)     | [SAAS.md](SAAS.md)                                     |
-| Put it on a server                                    | [DEPLOY.md](DEPLOY.md)                                 |
-| Update an older copy of the starter                   | [UPDATE.md](UPDATE.md)                                 |
+| You want to… | Read |
+| --- | --- |
+| Start working on the project | **this file** |
+| Every command for a one-company project | [README_SINGLE_BUSINESS.md](README_SINGLE_BUSINESS.md) |
+| Every command for SaaS mode (tenants, plans, billing) | [README_SAAS.md](README_SAAS.md) |
+| How the code works and how to change it (deep dive) | [README_DEVELOPER.md](README_DEVELOPER.md) |
+| Full command reference with all options | [README_PROJECT_CMD.md](README_PROJECT_CMD.md) |
+| Build a mobile app / frontend against the API | [API_GUIDE.md](API_GUIDE.md) + `/docs/api` |
+| How SaaS mode works (DNS, SSL, gateways, convert) | [SAAS.md](SAAS.md) |
+| Put it on a server | [DEPLOY.md](DEPLOY.md) |
+| Update an older copy of the starter | [UPDATE.md](UPDATE.md) |
 
 ---
 
@@ -44,7 +44,7 @@ docker compose exec app php artisan starter:install          # asks: Single busi
 docker compose run --rm node sh -c "npm install && npm run build"
 ```
 
-Open http://localhost:8080/admin and sign in. Git Bash says _"the input device is not a TTY"_? Put `winpty` in front of the command.
+Open http://localhost:8080/admin and sign in. Git Bash says *"the input device is not a TTY"*? Put `winpty` in front of the command.
 
 **SaaS instead of single business:** first give the database user rights to create tenant databases, then install with the SaaS options:
 
@@ -59,18 +59,18 @@ Then http://localhost:8080/admin is the SaaS console and http://demo.localhost:8
 
 The ports are the defaults from `.env` (`APP_PORT`, `FORWARD_*`, `REVERB_PORT`, `VITE_PORT`). If you changed them, use yours.
 
-| URL                                 | What                                              |
-| ----------------------------------- | ------------------------------------------------- |
-| http://localhost:8080               | Website                                           |
-| http://localhost:8080/admin         | Admin panel (SaaS mode: the SaaS console)         |
-| http://_name_.localhost:8080/admin  | SaaS mode: a tenant's admin panel                 |
-| http://localhost:8080/docs/api      | API documentation (try requests from the browser) |
-| http://localhost:8080/admin/horizon | Queues (super admin)                              |
-| http://localhost:8080/admin/logs    | Log files                                         |
-| http://localhost:8025               | Mailpit: every email the app sends lands here     |
-| http://localhost:8082               | phpMyAdmin (root, every database)                 |
-| `127.0.0.1:3307`                    | MySQL from your PC, user `starter` / `secret`     |
-| http://localhost:5173               | Vite dev server (only with `--profile dev`)       |
+| URL | What |
+| --- | --- |
+| http://localhost:8080 | Website |
+| http://localhost:8080/admin | Admin panel (SaaS mode: the SaaS console) |
+| http://*name*.localhost:8080/admin | SaaS mode: a tenant's admin panel |
+| http://localhost:8080/docs/api | API documentation (try requests from the browser) |
+| http://localhost:8080/admin/horizon | Queues (super admin) |
+| http://localhost:8080/admin/logs | Log files |
+| http://localhost:8025 | Mailpit: every email the app sends lands here |
+| http://localhost:8082 | phpMyAdmin (root, every database) |
+| `127.0.0.1:3307` | MySQL from your PC, user `starter` / `secret` |
+| http://localhost:5173 | Vite dev server (only with `--profile dev`) |
 
 ### Two copies on one machine (e.g. one single business, one SaaS)
 
@@ -217,21 +217,10 @@ app/Modules/Products/
     "central": false,
     "tenant": true,
     "permissions": [
-        {
-            "key": "products",
-            "label": "Products",
-            "actions": ["view", "create", "edit", "delete", "export", "import"]
-        }
+        { "key": "products", "label": "Products", "actions": ["view", "create", "edit", "delete", "export", "import"] }
     ],
     "menu": [
-        {
-            "key": "products",
-            "group": "Catalog",
-            "label": "Products",
-            "icon": "bi-box-seam",
-            "route": "admin.products.index",
-            "permission": "products.view"
-        }
+        { "key": "products", "group": "Catalog", "label": "Products", "icon": "bi-box-seam", "route": "admin.products.index", "permission": "products.view" }
     ]
 }
 ```
@@ -248,26 +237,26 @@ docker compose exec app php artisan make:module Product \
   --group="Catalog" --icon=bi-box-seam --web --api --migrate
 ```
 
-| Option                 | Meaning                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `--fields=`            | `name:type[:nullable][:unique]`, comma separated                               |
-| `--group=` / `--icon=` | Sidebar section (`config/starter.php` → `menu_groups`) / Bootstrap icon        |
-| `--web`                | Public pages `/products` and `/products/{id}`                                  |
-| `--api`                | REST API `/api/v1/products` + JSON resource, appears in `/docs/api`            |
-| `--migrate`            | Create the table, permissions and menu item now (SaaS: in every tenant too)    |
-| `--for=`               | SaaS only: `tenant` (default, sold on plans), `central` (your console), `both` |
-| `--force`              | Regenerate an existing module                                                  |
+| Option | Meaning |
+| --- | --- |
+| `--fields=` | `name:type[:nullable][:unique]`, comma separated |
+| `--group=` / `--icon=` | Sidebar section (`config/starter.php` → `menu_groups`) / Bootstrap icon |
+| `--web` | Public pages `/products` and `/products/{id}` |
+| `--api` | REST API `/api/v1/products` + JSON resource, appears in `/docs/api` |
+| `--migrate` | Create the table, permissions and menu item now (SaaS: in every tenant too) |
+| `--for=` | SaaS only: `tenant` (default, sold on plans), `central` (your console), `both` |
+| `--force` | Regenerate an existing module |
 
-| Field type             | Column              | Form input                                                                   |
-| ---------------------- | ------------------- | ---------------------------------------------------------------------------- |
-| `string` `email` `url` | varchar             | text / email / url                                                           |
-| `text`                 | text                | textarea                                                                     |
-| `editor`               | longText            | rich text (cleaned with HTML Purifier)                                       |
-| `integer` `decimal`    | int / decimal(12,2) | number                                                                       |
-| `boolean`              | boolean             | switch (`is_active` also gets a status toggle in the list)                   |
-| `date` `datetime`      | date / datetime     | date picker                                                                  |
-| `image`                | path                | upload with preview, stored on the `uploads` disk (server or S3)             |
-| `foreignId`            | foreign key         | select from the related table (`product_category_id` → `product_categories`) |
+| Field type | Column | Form input |
+| --- | --- | --- |
+| `string` `email` `url` | varchar | text / email / url |
+| `text` | text | textarea |
+| `editor` | longText | rich text (cleaned with HTML Purifier) |
+| `integer` `decimal` | int / decimal(12,2) | number |
+| `boolean` | boolean | switch (`is_active` also gets a status toggle in the list) |
+| `date` `datetime` | date / datetime | date picker |
+| `image` | path | upload with preview, stored on the `uploads` disk (server or S3) |
+| `foreignId` | foreign key | select from the related table (`product_category_id` → `product_categories`) |
 
 You get: model with activity log, migration, admin list (search, sort, filters, export, import, bulk actions, trash), create/edit forms, form requests, routes, permissions `products.view|create|edit|delete|export|import` and a sidebar item. Super admins see it at once; give other roles access under **Access control → Roles**.
 
@@ -316,12 +305,12 @@ The sidebar is built from `menu_items` (filled from `module.json`), filtered by 
 
 ### URLs
 
-| What                    | URL                                      | Who signs in                 |
-| ----------------------- | ---------------------------------------- | ---------------------------- |
-| Staff API (admin users) | `/api/v1/...`                            | users of the admin panel     |
-| Customer app API        | `/api/v1/shop/...`                       | customers (Customers module) |
-| Docs (v1, staff + shop) | **`/docs/api`** (JSON: `/docs/api.json`) |                              |
-| Docs (v2, once added)   | `/docs/api/v2`                           |                              |
+| What | URL | Who signs in |
+| --- | --- | --- |
+| Staff API (admin users) | `/api/v1/...` | users of the admin panel |
+| Customer app API | `/api/v1/shop/...` | customers (Customers module) |
+| Docs (v1, staff + shop) | **`/docs/api`** (JSON: `/docs/api.json`) | |
+| Docs (v2, once added) | `/docs/api/v2` | |
 
 SaaS mode: call the tenant's host, e.g. `http://acme.localhost:8080/api/v1/...`. Tokens belong to one tenant.
 
@@ -329,11 +318,11 @@ The docs are generated from the code by **Scramble**, so they never go out of da
 
 ### Get a token
 
-| Way                    | How                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| From the admin panel   | Top-right menu → **My profile** → _API tokens_ → name it, choose _Full access_ or _Read only_ → copy (shown once) |
-| From an app (staff)    | `POST /api/v1/auth/token` with `email`, `password`, `device_name` (+ `code` when 2FA is on)                       |
-| From an app (customer) | `POST /api/v1/shop/auth/register` or `POST /api/v1/shop/auth/token`                                               |
+| Way | How |
+| --- | --- |
+| From the admin panel | Top-right menu → **My profile** → *API tokens* → name it, choose *Full access* or *Read only* → copy (shown once) |
+| From an app (staff) | `POST /api/v1/auth/token` with `email`, `password`, `device_name` (+ `code` when 2FA is on) |
+| From an app (customer) | `POST /api/v1/shop/auth/register` or `POST /api/v1/shop/auth/token` |
 
 Every call sends `Authorization: Bearer <token>` and `Accept: application/json`. A token works on every API version. **Settings → Security → Allow API access** switches all staff tokens off at once.
 
@@ -341,7 +330,7 @@ Every call sends `Authorization: Bearer <token>` and `Accept: application/json`.
 
 1. Get a token (above).
 2. Open http://localhost:8080/docs/api, pick an endpoint, e.g. `GET /me`.
-3. In the request panel, open **Auth** → _Bearer token_ → paste the token (without the word `Bearer`).
+3. In the request panel, open **Auth** → *Bearer token* → paste the token (without the word `Bearer`).
 4. **Send API Request**: you see the real response.
 
 Command line:
@@ -356,23 +345,23 @@ Permissions are the same as in the panel: a user who can't edit posts gets `403`
 
 ### Add endpoints
 
-| Want                       | Do                                                                                                                                                          |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| API for a new module       | `make:module Product … --api`                                                                                                                               |
-| API for an existing module | Add `Controllers/Api/XController.php` + `Routes/api.php` in the module (copy from a module made with `--api`)                                               |
-| Change the JSON            | `app/Modules/X/Resources/XResource.php`                                                                                                                     |
+| Want | Do |
+| --- | --- |
+| API for a new module | `make:module Product … --api` |
+| API for an existing module | Add `Controllers/Api/XController.php` + `Routes/api.php` in the module (copy from a module made with `--api`) |
+| Change the JSON | `app/Modules/X/Resources/XResource.php` |
 | Show it nicely in the docs | PHPDoc summary on the method, `#[Group('Products')]` on the controller, `#[QueryParameter(...)]` for query params; request bodies come from the FormRequest |
-| Customer endpoints         | `Routes/shop.php` (signed-in customers) / `Routes/shop_guest.php` (public) in the module                                                                    |
+| Customer endpoints | `Routes/shop.php` (signed-in customers) / `Routes/shop_guest.php` (public) in the module |
 
 ### Add API v2 (when v1 must stay for old app versions)
 
 1. `config/starter.php`: uncomment the v2 line.
-    ```php
-    'api_versions' => [
-        'v1' => 'Routes/api.php',
-        'v2' => 'Routes/api_v2.php',
-    ],
-    ```
+   ```php
+   'api_versions' => [
+       'v1' => 'Routes/api.php',
+       'v2' => 'Routes/api_v2.php',
+   ],
+   ```
 2. In each module that changes, add `Routes/api_v2.php` (copy `api.php`) pointing at new controllers, e.g. `Controllers/Api/V2/ProductController.php` with a new `Resources/V2/ProductResource.php`. Modules without `api_v2.php` simply have no v2 endpoints.
 3. `art optimize:clear`. You now have `/api/v2/products` (route names `api.v2.products.*`) and docs at **`/docs/api/v2`**. v1 keeps working unchanged.
 4. Customer API v2: same idea with `shop_api_versions` and `Routes/shop_v2.php`.
@@ -433,34 +422,34 @@ HTTPS, RDS, S3, Auto Scaling: [DEPLOY.md](DEPLOY.md). SaaS DNS (wildcard) and ga
 
 ## 11. Troubleshooting
 
-| Problem                                          | Fix                                                                                                                    |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Port already in use                              | Change `APP_PORT` / `FORWARD_*` / `REVERB_PORT` / `VITE_PORT` in `.env`, `docker compose up -d`                        |
-| `deploy.sh` or entrypoint fails with `\r` errors | You cloned with CRLF: `git config --global core.autocrlf false`, delete the folder, clone again                        |
-| No styles / old JS                               | `docker compose run --rm node sh -c "npm install && npm run build"`                                                    |
-| New module not in sidebar / 404                  | `art module:sync`, `art optimize:clear`, role has `<slug>.view`                                                        |
-| 403                                              | Tick the permission under Access control → Roles                                                                       |
-| Emails not arriving                              | Locally they are in Mailpit: http://localhost:8025                                                                     |
-| Job / email change ignored                       | `docker compose restart horizon`                                                                                       |
-| `/docs/api` says 403 on a server                 | Sign in to `/admin` first as super admin or a user with `settings.view`                                                |
-| API returns 401                                  | Missing/expired token or `Accept: application/json` header missing; check Settings → Security → Allow API access is on |
-| SaaS problems                                    | [README_SAAS.md](README_SAAS.md) section 11                                                                            |
+| Problem | Fix |
+| --- | --- |
+| Port already in use | Change `APP_PORT` / `FORWARD_*` / `REVERB_PORT` / `VITE_PORT` in `.env`, `docker compose up -d` |
+| `deploy.sh` or entrypoint fails with `\r` errors | You cloned with CRLF: `git config --global core.autocrlf false`, delete the folder, clone again |
+| No styles / old JS | `docker compose run --rm node sh -c "npm install && npm run build"` |
+| New module not in sidebar / 404 | `art module:sync`, `art optimize:clear`, role has `<slug>.view` |
+| 403 | Tick the permission under Access control → Roles |
+| Emails not arriving | Locally they are in Mailpit: http://localhost:8025 |
+| Job / email change ignored | `docker compose restart horizon` |
+| `/docs/api` says 403 on a server | Sign in to `/admin` first as super admin or a user with `settings.view` |
+| API returns 401 | Missing/expired token or `Accept: application/json` header missing; check Settings → Security → Allow API access is on |
+| SaaS problems | [README_SAAS.md](README_SAAS.md) section 11 |
 
 ---
 
 ## 12. Packages
 
-| Package                                                                     | Used for                                  |
-| --------------------------------------------------------------------------- | ----------------------------------------- |
-| laravel/fortify                                                             | sign-in, 2FA, password reset              |
-| laravel/sanctum                                                             | API tokens                                |
-| dedoc/scramble                                                              | API docs at `/docs/api`                   |
-| laravel/horizon · laravel/reverb                                            | queues · WebSockets                       |
-| stancl/tenancy                                                              | SaaS mode (database per tenant)           |
+| Package | Used for |
+| --- | --- |
+| laravel/fortify | sign-in, 2FA, password reset |
+| laravel/sanctum | API tokens |
+| dedoc/scramble | API docs at `/docs/api` |
+| laravel/horizon · laravel/reverb | queues · WebSockets |
+| stancl/tenancy | SaaS mode (database per tenant) |
 | spatie/laravel-permission · activitylog · medialibrary · backup · sluggable | roles, audit trail, media, backups, slugs |
-| opcodesio/log-viewer                                                        | log files at `/admin/logs`                |
-| league/flysystem-aws-s3-v3                                                  | uploads and backups on S3                 |
-| mews/purifier                                                               | rich text cleaning                        |
-| Bootstrap 5, Bootstrap Icons, Trix, Chart.js, SortableJS · Tailwind CSS 4   | admin UI · website                        |
+| opcodesio/log-viewer | log files at `/admin/logs` |
+| league/flysystem-aws-s3-v3 | uploads and backups on S3 |
+| mews/purifier | rich text cleaning |
+| Bootstrap 5, Bootstrap Icons, Trix, Chart.js, SortableJS · Tailwind CSS 4 | admin UI · website |
 
 Front-end entry points: `resources/admin/admin.{css,js}` and `resources/web/web.{css,js}` (`vite.config.js`).
