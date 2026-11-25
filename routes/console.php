@@ -10,13 +10,16 @@ use Illuminate\Support\Facades\Schedule;
 // Run with "php artisan schedule:work" (the scheduler container does this for you).
 
 /*
-| Tasks that work on a tenant's own data. Single business: runs normally.
-| SaaS mode: runs once for EVERY tenant database ("php artisan tenants:run …").
+| Tasks that work on a site's own data. Single business: runs normally.
+| SaaS mode: runs for the central database (your own website) AND once for every
+| tenant database ("php artisan tenants:run …").
 */
-$perTenant = function (string $command, array $options = []): Event {
+$perTenant = function (string $command, array $options = []): object {
     if (! Tenancy::enabled()) {
         return Schedule::command($command, $options);
     }
+
+    $central = Schedule::command($command, $options);
 
     $pairs = [];
     foreach ($options as $name => $value) {
@@ -25,7 +28,24 @@ $perTenant = function (string $command, array $options = []): Event {
         }
     }
 
-    return Schedule::command('tenants:run', array_filter([$command, '--option' => $pairs]));
+    $tenants = Schedule::command('tenants:run', array_filter([$command, '--option' => $pairs]));
+
+    // ->everyMinute(), ->dailyAt(…), ->onOneServer() … apply to both.
+    return new class([$central, $tenants])
+    {
+        /** @param  array<int, Event>  $events */
+        public function __construct(private array $events) {}
+
+        /** @param  array<int, mixed>  $arguments */
+        public function __call(string $method, array $arguments): static
+        {
+            foreach ($this->events as $event) {
+                $event->{$method}(...$arguments);
+            }
+
+            return $this;
+        }
+    };
 };
 
 // Heartbeat shown on the dashboard's System status card.
