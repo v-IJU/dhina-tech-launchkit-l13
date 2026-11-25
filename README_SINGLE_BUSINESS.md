@@ -17,19 +17,26 @@ alias dc="docker compose"
 alias comp="docker compose exec app composer"
 ```
 
-Git Bash says *"the input device is not a TTY"*? Put `winpty` in front of the command.
+Git Bash says _"the input device is not a TTY"_? Put `winpty` in front of the command.
 
 ## 2. URLs (local)
 
-| URL | What |
-| --- | --- |
-| http://localhost:8080 | Website |
-| http://localhost:8080/admin | Admin panel |
-| http://localhost:8080/admin/horizon | Queues (super admin) |
-| http://localhost:8080/admin/logs | Log files |
-| http://localhost:8025 | Mailpit: every email the app sends |
-| http://localhost:8082 | phpMyAdmin |
-| `127.0.0.1:3307` | MySQL from your PC (user `starter`, password `secret`) |
+These are the default ports. Each copy of the project reads its ports from its own `.env`; if you changed them (e.g. a second copy next to a SaaS one), use yours.
+
+| URL (default)                       | `.env` key                 | What                                                   |
+| ----------------------------------- | -------------------------- | ------------------------------------------------------ |
+| http://localhost:8080               | `APP_PORT` (and `APP_URL`) | Website                                                |
+| http://localhost:8080/admin         |                            | Admin panel                                            |
+| http://localhost:8080/docs/api      |                            | API docs                                               |
+| http://localhost:8080/admin/horizon |                            | Queues (super admin)                                   |
+| http://localhost:8080/admin/logs    |                            | Log files                                              |
+| http://localhost:8025               | `FORWARD_MAILPIT_PORT`     | Mailpit: every email the app sends                     |
+| http://localhost:8082               | `FORWARD_PMA_PORT`         | phpMyAdmin                                             |
+| `127.0.0.1:3307`                    | `FORWARD_DB_PORT`          | MySQL from your PC (user `starter`, password `secret`) |
+| `localhost:8081`                    | `REVERB_PORT`              | WebSockets (used by the browser automatically)         |
+| http://localhost:5173               | `VITE_PORT`                | Vite dev server (`--profile dev`)                      |
+
+Example second copy (`.env`): `COMPOSE_PROJECT_NAME=launchkit-single`, `APP_PORT=8090`, `APP_URL=http://localhost:8090`, `REVERB_PORT=8091`, `FORWARD_DB_PORT=3308`, `FORWARD_PMA_PORT=8092`, `FORWARD_MAILPIT_PORT=8026`, `VITE_PORT=5174` → website on http://localhost:8090.
 
 ## 3. First install
 
@@ -82,15 +89,15 @@ art make:module Product \
   --group="Catalog" --icon=bi-box-seam --migrate
 ```
 
-| Option | Meaning |
-| --- | --- |
-| `--fields=` | `name:type[:nullable][:unique]`, comma separated |
-| `--group=` | Sidebar section (`config/starter.php` → `menu_groups`) |
-| `--icon=` | Bootstrap icon, e.g. `bi-people` |
-| `--web` | Public pages `/products` and `/products/{id}` |
-| `--api` | REST API `/api/v1/products` |
-| `--migrate` | Create the table, permissions and menu item now |
-| `--force` | Regenerate an existing module (delete its old migration first) |
+| Option      | Meaning                                                        |
+| ----------- | -------------------------------------------------------------- |
+| `--fields=` | `name:type[:nullable][:unique]`, comma separated               |
+| `--group=`  | Sidebar section (`config/starter.php` → `menu_groups`)         |
+| `--icon=`   | Bootstrap icon, e.g. `bi-people`                               |
+| `--web`     | Public pages `/products` and `/products/{id}`                  |
+| `--api`     | REST API `/api/v1/products`                                    |
+| `--migrate` | Create the table, permissions and menu item now                |
+| `--force`   | Regenerate an existing module (delete its old migration first) |
 
 Field types: `string`, `email`, `url`, `text`, `editor`, `integer`, `decimal`, `boolean`, `date`, `datetime`, `image`, `foreignId`.
 
@@ -164,13 +171,13 @@ In your own code always use `Storage::disk('uploads')`. Images not showing local
 
 ## 8. Queues, schedule, backups
 
-| Command | What |
-| --- | --- |
-| `art schedule:list` | Every scheduled job and when it runs |
+| Command                                    | What                                                         |
+| ------------------------------------------ | ------------------------------------------------------------ |
+| `art schedule:list`                        | Every scheduled job and when it runs                         |
 | `art queue:failed` / `art queue:retry all` | Failed jobs (also Admin → System → Monitoring → Failed jobs) |
-| `art backup:run` / `art backup:list` | Backups |
-| `art trash:empty --days=30` | Empty the trash |
-| `art health:check` | Database, cache, storage, Redis, Horizon, scheduler, disk |
+| `art backup:run` / `art backup:list`       | Backups                                                      |
+| `art trash:empty --days=30`                | Empty the trash                                              |
+| `art health:check`                         | Database, cache, storage, Redis, Horizon, scheduler, disk    |
 
 Horizon, the scheduler and Reverb run in their own containers; you don't start them by hand.
 
@@ -195,15 +202,15 @@ Full guide: `DEPLOY.md` (HTTPS, RDS, S3 backups, Auto Scaling).
 
 ## 11. Troubleshooting
 
-| Problem | Fix |
-| --- | --- |
-| New module 404 / not in sidebar | `art module:sync`, `art optimize:clear`, check the role has `<slug>.view` |
-| 403 on a page | Tick the permission under Access control → Roles (or Users → key icon for one user) |
-| No styles | `dc run --rm node sh -c "npm install && npm run build"` |
-| Emails not arriving | Locally: http://localhost:8025 (Mailpit) |
-| Job / email change ignored | `dc restart horizon` |
-| Errors | Admin → System → Monitoring → Error log, or Log files |
-| Port in use | Change `APP_PORT`, `REVERB_PORT`, `FORWARD_DB_PORT`, `FORWARD_PMA_PORT` in `.env`, `dc up -d` |
+| Problem                         | Fix                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| New module 404 / not in sidebar | `art module:sync`, `art optimize:clear`, check the role has `<slug>.view`                     |
+| 403 on a page                   | Tick the permission under Access control → Roles (or Users → key icon for one user)           |
+| No styles                       | `dc run --rm node sh -c "npm install && npm run build"`                                       |
+| Emails not arriving             | Locally: http://localhost:8025 (Mailpit)                                                      |
+| Job / email change ignored      | `dc restart horizon`                                                                          |
+| Errors                          | Admin → System → Monitoring → Error log, or Log files                                         |
+| Port in use                     | Change `APP_PORT`, `REVERB_PORT`, `FORWARD_DB_PORT`, `FORWARD_PMA_PORT` in `.env`, `dc up -d` |
 
 ## 12. Later: turn this into a SaaS
 
