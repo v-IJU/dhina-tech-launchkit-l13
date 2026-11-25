@@ -1,0 +1,17 @@
+{
+    "name": "Modules",
+    "slug": "modules",
+    "description": "See installed modules, switch them on or off, and generate new ones.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 92,
+    "central": true,
+    "tenant": false,
+    "permissions": [
+        { "key": "modules", "label": "Modules", "actions": ["view", "create", "edit"] }
+    ],
+    "menu": [
+        { "key": "modules", "group": "System", "label": "Modules", "icon": "bi-box-seam", "route": "admin.modules.index", "permission": "modules.view" }
+    ]
+}

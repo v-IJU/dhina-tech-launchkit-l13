@@ -1,0 +1,17 @@
+@extends('layouts.admin')
+
+@section('content')
+    <x-admin.page-header title="__Label__" :breadcrumbs="['__group__', '__Label__']">
+        @can('__slug__.import')
+            <a href="{{ route('admin.__slug__.import') }}" class="btn btn-outline-secondary"><i class="bi bi-upload me-1"></i> Import</a>
+        @endcan
+        @can('__slug__.create')
+            <a href="{{ route('admin.__slug__.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Add __singular__</a>
+        @endcan
+    </x-admin.page-header>
+
+    {{-- Toolbar, bulk bar and AJAX reload come from the component; the rows are in _table.blade.php --}}
+    <x-admin.datatable :table="$table" search="Search __label__…">
+        @include('__slug__::admin._table')
+    </x-admin.datatable>
+@endsection

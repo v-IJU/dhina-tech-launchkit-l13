@@ -1,0 +1,17 @@
+{
+    "name": "Backups & system",
+    "slug": "backups",
+    "description": "Database and file backups, system information and maintenance tools.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 93,
+    "central": true,
+    "tenant": false,
+    "permissions": [
+        { "key": "backups", "label": "Backups & system", "actions": ["view", "create", "delete", "download"] }
+    ],
+    "menu": [
+        { "key": "backups", "group": "System", "label": "Backups & system", "icon": "bi-database-check", "route": "admin.backups.index", "permission": "backups.view" }
+    ]
+}

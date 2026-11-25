@@ -1,0 +1,186 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Controllers\Admin;
+
+use App\Core\DataTable\DataTable;
+use App\Core\Http\StoresUploads;
+use App\Core\Import\CsvImport;
+use App\Core\Import\HandlesImport;
+use App\Http\Controllers\Controller;
+use App\Modules\__Module__\Models\__Model__;
+use App\Modules\__Module__\Requests\Store__Model__Request;
+use App\Modules\__Module__\Requests\Update__Model__Request;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Mews\Purifier\Facades\Purifier;
+use Symfony\Component\HttpFoundation\Response;
+
+class __Model__Controller extends Controller implements HasMiddleware
+{
+    use HandlesImport, StoresUploads;
+
+    /** @var array<int, string> File inputs saved to storage/app/public/__slug__ */
+    private array $uploads = [__uploads__];
+
+    /** @var array<int, string> Rich text fields cleaned with HTML Purifier */
+    private array $richText = [__richText__];
+
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:__slug__.view', only: ['index']),
+            new Middleware('permission:__slug__.create', only: ['create', 'store']),
+            new Middleware('permission:__slug__.edit', only: ['edit', 'update', 'toggle']),
+            new Middleware('permission:__slug__.delete', only: ['destroy', 'restore', 'forceDelete']),
+            new Middleware('permission:__slug__.import', only: ['importForm', 'import', 'importTemplate']),
+        ];
+    }
+
+    /**
+     * List page. Search, sorting, filters, per-page, CSV export and bulk actions
+     * all come from the query string; see app/Core/DataTable/DataTable.php.
+     */
+    public function index(Request $request): Response
+    {
+        return DataTable::of(__Model__::query(), $request)
+            ->search([__searchColumns__])
+            ->sortable([__sortColumns__], default: '__defaultSort__', direction: '__defaultDir__')
+__filters__            ->dateRange('created_at')
+            ->export('__slug__', [
+__exportColumns__
+            ], '__slug__.export')
+            ->bulk(route('admin.__slug__.bulk'), [__bulkPermissions__])
+            ->trash('__slug__.delete')
+            ->render('__slug__::admin.index', '__slug__::admin._table');
+    }
+
+    public function create(): View
+    {
+        return view('__slug__::admin.create', ['__model__' => new __Model__, 'options' => $this->options()]);
+    }
+
+    public function store(Store__Model__Request $request): RedirectResponse
+    {
+        $data = $this->prepare($request, $request->validated());
+        __Model__::create($data);
+
+        return redirect()->route('admin.__slug__.index')->with('success', '__Singular__ created.');
+    }
+
+    public function edit(__Model__ $__model__): View
+    {
+        return view('__slug__::admin.edit', ['__model__' => $__model__, 'options' => $this->options()]);
+    }
+
+    public function update(Update__Model__Request $request, __Model__ $__model__): RedirectResponse
+    {
+        $data = $this->prepare($request, $request->validated(), $__model__);
+        $__model__->update($data);
+
+        return redirect()->route('admin.__slug__.index')->with('success', '__Singular__ updated.');
+    }
+
+    public function destroy(__Model__ $__model__): RedirectResponse
+    {
+        $__model__->delete();
+
+        return back()->with('success', '__Singular__ moved to the trash.');
+    }
+
+    public function restore(__Model__ $__model__): RedirectResponse
+    {
+        $__model__->restore();
+
+        return back()->with('success', '__Singular__ restored.');
+    }
+
+    public function forceDelete(__Model__ $__model__): RedirectResponse
+    {
+        $__model__->forceDelete(); // the model removes its uploaded files
+
+        return back()->with('success', '__Singular__ deleted forever.');
+    }
+
+    /**
+     * Bulk actions from the list page: __bulkList__.
+     */
+    public function bulk(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', Rule::in([__bulkActionList__, 'restore', 'force-delete'])],
+            'ids' => ['required', 'array'],
+            'ids.*' => ['integer'],
+        ]);
+        $needsDelete = in_array($data['action'], ['delete', 'restore', 'force-delete'], true);
+        abort_unless($request->user()->can($needsDelete ? '__slug__.delete' : '__slug__.edit'), 403);
+
+        $inTrash = in_array($data['action'], ['restore', 'force-delete'], true);
+        $items = __Model__::query()->when($inTrash, fn ($q) => $q->onlyTrashed())->whereKey($data['ids'])->get();
+
+        match ($data['action']) {
+            'delete' => $items->each->delete(),
+            'restore' => $items->each->restore(),
+            'force-delete' => $items->each->forceDelete(),
+            default => null,
+        };
+__bulkUpdate__
+        $done = ['delete' => 'moved to the trash', 'restore' => 'restored', 'force-delete' => 'deleted forever'][$data['action']] ?? 'updated';
+
+        return back()->with('success', $items->count()." item(s) {$done}.");
+    }
+__toggle__
+    /**
+     * Columns accepted by "Import CSV" (same headings as Export CSV).
+     *
+     * @return CsvImport<__Model__>
+     */
+    protected function importer(): CsvImport
+    {
+        return CsvImport::make(__Model__::class)
+__importColumns__
+            ->purify($this->richText)
+            ->matchBy('id');
+    }
+
+    /**
+     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
+     */
+    protected function importPage(): array
+    {
+        return ['title' => '__Label__', 'slug' => '__slug__', 'back' => route('admin.__slug__.index'), 'breadcrumbs' => ['__group__', '__Label__', 'Import']];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function prepare(Request $request, array $data, ?__Model__ $__model__ = null): array
+    {
+        foreach ($this->richText as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = Purifier::clean($data[$field]);
+            }
+        }
+
+        return $this->storeUploads($request, $data, $this->uploads, '__slug__', $__model__);
+    }
+
+    /**
+     * Options for select inputs (related records).
+     *
+     * @return array<string, mixed>
+     */
+    private function options(): array
+    {
+        return [
+__options__
+        ];
+    }
+}

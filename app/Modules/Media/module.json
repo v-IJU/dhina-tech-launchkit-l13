@@ -1,0 +1,17 @@
+{
+    "name": "Media library",
+    "slug": "media",
+    "description": "Upload images and documents once and reuse them in posts, pages and settings.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 31,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "media", "label": "Media library", "actions": ["view", "create", "edit", "delete"] }
+    ],
+    "menu": [
+        { "key": "media", "group": "Content", "label": "Media library", "icon": "bi-images", "route": "admin.media.index", "permission": "media.view" }
+    ]
+}

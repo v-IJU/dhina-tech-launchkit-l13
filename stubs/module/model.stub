@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+
+class __Model__ extends Model
+{
+    use LogsActivity, SoftDeletes;
+__uploadsConst__
+
+    protected $table = '__table__';
+
+__attributes__
+    protected $fillable = [
+__fillable__
+    ];
+
+    protected function casts(): array
+    {
+        return [
+__casts__
+        ];
+    }
+
+__uploadsHook__    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('__slug__')
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+}

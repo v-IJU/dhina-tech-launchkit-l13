@@ -1,0 +1,17 @@
+{
+    "name": "Menu builder",
+    "slug": "menus",
+    "description": "Reorder, rename and hide admin sidebar items; manage website header and footer menus.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 60,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "menus", "label": "Menu builder", "actions": ["view", "create", "edit", "delete"] }
+    ],
+    "menu": [
+        { "key": "menus", "group": "Appearance", "label": "Menu builder", "icon": "bi-list-nested", "route": "admin.menus.index", "permission": "menus.view" }
+    ]
+}

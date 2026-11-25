@@ -1,0 +1,110 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Controllers\Api;
+
+use App\Core\DataTable\DataTable;
+use App\Core\Http\StoresUploads;
+use Dedoc\Scramble\Attributes\QueryParameter;
+use App\Http\Controllers\Controller;
+use App\Modules\__Module__\Models\__Model__;
+use App\Modules\__Module__\Requests\Store__Model__Request;
+use App\Modules\__Module__\Requests\Update__Model__Request;
+use App\Modules\__Module__\Resources\__Model__Resource;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\DB;
+use Mews\Purifier\Facades\Purifier;
+
+/**
+ * REST API for __label__: /api/v1/__slug__
+ *
+ *   GET    /api/v1/__slug__            list (?q= &sort= &dir= &per_page= &page= &status= &from= &to=)
+ *   GET    /api/v1/__slug__/{id}       one record
+ *   POST   /api/v1/__slug__            create   (same fields and rules as the admin form)
+ *   PUT    /api/v1/__slug__/{id}       update   (send every required field)
+ *   DELETE /api/v1/__slug__/{id}       move to the trash
+ *
+ * Same permissions as the admin panel (__slug__.view / create / edit / delete).
+ */
+class __Model__Controller extends Controller implements HasMiddleware
+{
+    use StoresUploads;
+
+    /** @var array<int, string> File inputs saved to storage/app/public/__slug__ */
+    private array $uploads = [__uploads__];
+
+    /** @var array<int, string> Rich text fields cleaned with HTML Purifier */
+    private array $richText = [__richText__];
+
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('permission:__slug__.view', only: ['index', 'show']),
+            new Middleware('permission:__slug__.create', only: ['store']),
+            new Middleware('permission:__slug__.edit', only: ['update']),
+            new Middleware('permission:__slug__.delete', only: ['destroy']),
+        ];
+    }
+
+    /**
+     * List (paginated). Same search, filters and sorting as the admin list.
+     *
+     * @response AnonymousResourceCollection<LengthAwarePaginator<__Model__Resource>>
+     */
+__apiQueryParams__    public function index(Request $request): JsonResponse
+    {
+        return DataTable::of(__Model__::query(), $request)
+            ->search([__searchColumns__])
+            ->sortable([__sortColumns__], default: '__defaultSort__', direction: '__defaultDir__')
+__filters__            ->dateRange('created_at')
+            ->json(__Model__Resource::class);
+    }
+
+    public function show(__Model__ $__model__): __Model__Resource
+    {
+        return new __Model__Resource($__model__);
+    }
+
+    public function store(Store__Model__Request $request): JsonResponse
+    {
+        $__model__ = __Model__::create($this->prepare($request, $request->validated()));
+
+        return (new __Model__Resource($__model__))->response()->setStatusCode(201);
+    }
+
+    public function update(Update__Model__Request $request, __Model__ $__model__): __Model__Resource
+    {
+        $__model__->update($this->prepare($request, $request->validated(), $__model__));
+
+        return new __Model__Resource($__model__->refresh());
+    }
+
+    public function destroy(__Model__ $__model__): JsonResponse
+    {
+        $__model__->delete();
+
+        return response()->json(['message' => '__Singular__ moved to the trash.']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function prepare(Request $request, array $data, ?__Model__ $__model__ = null): array
+    {
+        foreach ($this->richText as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = Purifier::clean($data[$field]);
+            }
+        }
+
+        return $this->storeUploads($request, $data, $this->uploads, '__slug__', $__model__);
+    }
+
+__apiOptions__}

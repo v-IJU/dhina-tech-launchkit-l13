@@ -1,0 +1,20 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - app
+    tmpDir: storage/framework/cache/phpstan
+    treatPhpDocTypesAsCertain: false
+    # Larastan reads migrations to know model columns. Add new module folders here.
+    databaseMigrationsPath:
+        - database/migrations
+        - app/Modules/Blog/Database/Migrations
+        - app/Modules/Faqs/Database/Migrations
+        - app/Modules/Inbox/Database/Migrations
+        - app/Modules/Media/Database/Migrations
+        - app/Modules/Pages/Database/Migrations
+        - app/Modules/Services/Database/Migrations
+        - app/Modules/Sliders/Database/Migrations
+        - app/Modules/Testimonials/Database/Migrations

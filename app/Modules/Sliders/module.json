@@ -1,0 +1,17 @@
+{
+    "name": "Sliders",
+    "slug": "sliders",
+    "description": "Home page hero slides shown at the top of the website.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 41,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "sliders", "label": "Sliders", "actions": ["view", "create", "edit", "delete", "export", "import"] }
+    ],
+    "menu": [
+        { "key": "sliders", "group": "Website CMS", "label": "Sliders", "icon": "bi-images", "route": "admin.sliders.index", "permission": "sliders.view", "order": 41 }
+    ]
+}

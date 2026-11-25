@@ -1,0 +1,15 @@
+@extends('layouts.web')
+
+@section('title', $__model__->__titleColumn__)
+
+@section('content')
+    <section class="section">
+        <div class="container-site max-w-3xl">
+            <a href="{{ route('__slug__.index') }}" class="text-sm font-semibold text-brand-700">&larr; All __label__</a>
+            <h1 class="mt-4 section-title">{{ $__model__->__titleColumn__ }}</h1>
+            <dl class="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+__webFields__
+            </dl>
+        </div>
+    </section>
+@endsection

@@ -1,0 +1,19 @@
+{
+    "name": "Contact inbox",
+    "slug": "inbox",
+    "description": "Website contact form messages with replies, plus newsletter subscribers.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 45,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "inbox", "label": "Contact inbox", "actions": ["view", "edit", "delete", "reply"] },
+        { "key": "subscribers", "label": "Newsletter subscribers", "actions": ["view", "delete", "export", "import"] }
+    ],
+    "menu": [
+        { "key": "inbox", "group": "Website CMS", "label": "Contact inbox", "icon": "bi-inbox", "route": "admin.inbox.index", "permission": "inbox.view", "order": 250 },
+        { "key": "subscribers", "group": "Website CMS", "label": "Subscribers", "icon": "bi-envelope-paper", "route": "admin.subscribers.index", "permission": "subscribers.view", "order": 251 }
+    ]
+}

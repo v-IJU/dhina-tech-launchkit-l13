@@ -1,0 +1,24 @@
+{
+    "name": "Users",
+    "slug": "users",
+    "description": "Admin users, profiles, account status, two-factor login and sign in as another user.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 10,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "users", "label": "Users", "actions": ["view", "create", "edit", "delete", "export", "import", "impersonate", "permissions"] }
+    ],
+    "menu": [
+        {
+            "key": "users", "group": "Access control", "label": "Users", "icon": "bi-people", "permission": "users.view",
+            "children": [
+                { "key": "users.all", "label": "All users", "route": "admin.users.index", "permission": "users.view" },
+                { "key": "users.add", "label": "Add user", "route": "admin.users.create", "permission": "users.create" },
+                { "key": "users.logins", "label": "Sign-in history", "route": "admin.users.logins", "permission": "users.view" }
+            ]
+        }
+    ]
+}

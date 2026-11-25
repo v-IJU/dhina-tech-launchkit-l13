@@ -1,0 +1,17 @@
+{
+    "name": "Services",
+    "slug": "services",
+    "description": "Services listed on the website (Features block and /services page).",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 41,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "services", "label": "Services", "actions": ["view", "create", "edit", "delete", "export", "import"] }
+    ],
+    "menu": [
+        { "key": "services", "group": "Website CMS", "label": "Services", "icon": "bi-tools", "route": "admin.services.index", "permission": "services.view", "order": 42 }
+    ]
+}

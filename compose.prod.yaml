@@ -1,0 +1,124 @@
+# Production stack for one server (EC2, VPS). Code is baked into the images: nothing is mounted
+# except .env (read-only) and the "storage" volume (uploads, logs, cache files).
+#
+#   ./deploy.sh                                   pull code, build, migrate, restart, health check
+#   ./deploy.sh rollback                          back to the previous images
+#   docker compose -f compose.prod.yaml ps        what's running
+#   docker compose -f compose.prod.yaml logs -f app horizon
+#   docker compose -f compose.prod.yaml exec app php artisan tinker
+#
+# Database and Redis:
+#   Managed (AWS RDS / ElastiCache): set DB_HOST / REDIS_HOST in .env and leave COMPOSE_PROFILES empty.
+#   On this server: COMPOSE_PROFILES=mysql,redis in .env starts the bundled containers (DB_HOST=mysql, REDIS_HOST=redis).
+#
+# HTTPS: terminate it in front (AWS ALB + ACM certificate, Cloudflare, or a host nginx/Caddy) and point it at WEB_PORT.
+
+name: ${COMPOSE_PROJECT_NAME:-laravel13}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-php: &php
+  image: ${APP_IMAGE:-laravel13-app}:${APP_TAG:-latest}
+  restart: unless-stopped
+  logging: *logging
+  volumes:
+    - ./.env:/var/www/html/.env:ro
+    - storage:/var/www/html/storage
+  depends_on:
+    mysql:
+      condition: service_healthy
+      required: false
+    redis:
+      condition: service_healthy
+      required: false
+
+services:
+  app:
+    <<: *php
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: production
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    image: ${APP_IMAGE:-laravel13-app}-web:${APP_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: web
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "${WEB_PORT:-80}:80"
+    volumes:
+      - storage:/var/www/html/storage:ro
+    depends_on:
+      app:
+        condition: service_healthy
+
+  horizon:
+    <<: *php
+    command: ["php", "artisan", "horizon"]
+    stop_grace_period: 60s   # let running jobs finish on deploy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  scheduler:
+    <<: *php
+    command: ["php", "artisan", "schedule:work"]
+
+  reverb:
+    <<: *php
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    # No public port: browsers reach it through "web" at /app and /apps (docker/nginx/production.conf).
+
+  mysql:
+    image: mysql:8.4
+    profiles: ["mysql"]
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-starter}
+      MYSQL_USER: ${DB_USERNAME:-starter}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}   # set both in .env when using this container
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    restart: unless-stopped
+    logging: *logging
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  storage:
+  mysql-data:
+  redis-data:

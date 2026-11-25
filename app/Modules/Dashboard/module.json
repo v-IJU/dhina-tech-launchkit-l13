@@ -1,0 +1,17 @@
+{
+    "name": "Dashboard",
+    "slug": "dashboard",
+    "description": "Overview with key numbers, charts, recent activity and system status.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 1,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "dashboard", "label": "Dashboard", "actions": ["view"] }
+    ],
+    "menu": [
+        { "key": "dashboard", "group": "Main", "label": "Dashboard", "icon": "bi-speedometer2", "route": "admin.dashboard", "permission": "dashboard.view" }
+    ]
+}

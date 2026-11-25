@@ -1,0 +1,7 @@
+<?php
+
+use App\Modules\__Module__\Controllers\Api\__Model__Controller;
+use Illuminate\Support\Facades\Route;
+
+// Loaded inside the API group: URL /api/v1/__slug__, names "api.__slug__.*", Sanctum token required.
+Route::apiResource('__slug__', __Model__Controller::class)->parameters(['__slug__' => '__model__']);

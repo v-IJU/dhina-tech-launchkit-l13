@@ -1,0 +1,19 @@
+{
+    "name": "Roles & Permissions",
+    "slug": "roles",
+    "description": "Create roles, tick what each role can do, and add custom permissions.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 11,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "roles", "label": "Roles", "actions": ["view", "create", "edit", "delete"] },
+        { "key": "permissions", "label": "Permissions", "actions": ["view", "create", "delete"] }
+    ],
+    "menu": [
+        { "key": "roles", "group": "Access control", "label": "Roles", "icon": "bi-shield-lock", "route": "admin.roles.index", "permission": "roles.view" },
+        { "key": "permissions", "group": "Access control", "label": "Permissions", "icon": "bi-key", "route": "admin.permissions.index", "permission": "permissions.view" }
+    ]
+}

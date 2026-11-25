@@ -1,0 +1,8 @@
+<?php
+
+use App\Modules\__Module__\Controllers\Web\__Model__Controller;
+use Illuminate\Support\Facades\Route;
+
+// Public website routes
+Route::get('__slug__', [__Model__Controller::class, 'index'])->name('__slug__.index');
+Route::get('__slug__/{__model__}', [__Model__Controller::class, 'show'])->name('__slug__.show');

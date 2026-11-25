@@ -1,0 +1,24 @@
+{
+    "name": "Customers",
+    "slug": "customers",
+    "description": "Website customer accounts: sign up, sign in, email verification, two-factor login, addresses, My account pages and the /api/v1/shop mobile API. Staff manage customers here.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 60,
+    "central": false,
+    "tenant": true,
+    "permissions": [
+        { "key": "customers", "label": "Customers", "actions": ["view", "create", "edit", "delete", "export", "import", "impersonate"] }
+    ],
+    "menu": [
+        {
+            "key": "customers", "group": "Customers", "label": "Customers", "icon": "bi-person-vcard", "permission": "customers.view", "order": 15,
+            "children": [
+                { "key": "customers.all", "label": "All customers", "route": "admin.customers.index", "permission": "customers.view" },
+                { "key": "customers.add", "label": "Add customer", "route": "admin.customers.create", "permission": "customers.create" },
+                { "key": "customers.logins", "label": "Sign-in history", "route": "admin.customers.logins", "permission": "customers.view" }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,17 @@
+{
+    "name": "Testimonials",
+    "slug": "testimonials",
+    "description": "Client quotes shown in the Testimonials block.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 41,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "testimonials", "label": "Testimonials", "actions": ["view", "create", "edit", "delete", "export", "import"] }
+    ],
+    "menu": [
+        { "key": "testimonials", "group": "Website CMS", "label": "Testimonials", "icon": "bi-chat-quote", "route": "admin.testimonials.index", "permission": "testimonials.view", "order": 43 }
+    ]
+}

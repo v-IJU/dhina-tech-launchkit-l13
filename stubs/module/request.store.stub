@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class Store__Model__Request extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true; // access is checked by the permission middleware on the route
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function rules(): array
+    {
+        return [
+__rules__
+        ];
+    }
+}

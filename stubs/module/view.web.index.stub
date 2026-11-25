@@ -1,0 +1,21 @@
+@extends('layouts.web')
+
+@section('title', '__Label__')
+
+@section('content')
+    <section class="section">
+        <div class="container-site">
+            <h1 class="section-title">__Label__</h1>
+            <div class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                @forelse ($__models__ as $__model__)
+                    <a href="{{ route('__slug__.show', $__model__) }}" class="block rounded-2xl border border-slate-200 bg-white p-6 transition hover:shadow-lg">
+                        <h2 class="text-lg font-semibold text-ink">{{ $__model__->__titleColumn__ }}</h2>
+                    </a>
+                @empty
+                    <p class="text-slate-600">Nothing published yet.</p>
+                @endforelse
+            </div>
+            <div class="mt-10">{{ $__models__->links('pagination::tailwind') }}</div>
+        </div>
+    </section>
+@endsection

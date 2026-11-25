@@ -1,0 +1,18 @@
+{
+    "name": "Billing",
+    "slug": "billing",
+    "description": "SaaS mode only: a tenant's plan, trial, usage against limits, invoices, and paying or changing plan with Razorpay or Stripe.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 94,
+    "central": false,
+    "tenant": true,
+    "saas_only": true,
+    "permissions": [
+        { "key": "billing", "label": "Billing", "actions": ["view", "manage"] }
+    ],
+    "menu": [
+        { "key": "billing", "group": "System", "label": "Billing", "icon": "bi-credit-card", "route": "admin.billing.index", "permission": "billing.view", "order": 1 }
+    ]
+}

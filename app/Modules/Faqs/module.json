@@ -1,0 +1,17 @@
+{
+    "name": "FAQs",
+    "slug": "faqs",
+    "description": "Questions and answers shown in the FAQ block.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 41,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "faqs", "label": "FAQs", "actions": ["view", "create", "edit", "delete", "export", "import"] }
+    ],
+    "menu": [
+        { "key": "faqs", "group": "Website CMS", "label": "FAQs", "icon": "bi-question-circle", "route": "admin.faqs.index", "permission": "faqs.view", "order": 44 }
+    ]
+}

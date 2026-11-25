@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Controllers\Web;
+
+use App\Http\Controllers\Controller;
+use App\Modules\__Module__\Models\__Model__;
+use Illuminate\View\View;
+
+/**
+ * Public website pages for __label__.
+ */
+class __Model__Controller extends Controller
+{
+    public function index(): View
+    {
+        $__models__ = __Model__::query()__activeScope____orderBy__->paginate(12);
+
+        return view('__slug__::web.index', compact('__models__'));
+    }
+
+    public function show(__Model__ $__model__): View
+    {
+__activeGuard__
+        return view('__slug__::web.show', compact('__model__'));
+    }
+}

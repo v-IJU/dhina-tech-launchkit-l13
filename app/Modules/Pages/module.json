@@ -1,0 +1,17 @@
+{
+    "name": "Pages",
+    "slug": "pages",
+    "description": "Website pages built from reorderable content blocks, plus sitemap.xml and robots.txt.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 999,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "pages", "label": "Website pages", "actions": ["view", "create", "edit", "delete"] }
+    ],
+    "menu": [
+        { "key": "pages", "group": "Website CMS", "label": "Pages", "icon": "bi-window", "route": "admin.pages.index", "permission": "pages.view", "order": 40 }
+    ]
+}

@@ -1,0 +1,64 @@
+{
+    "name": "Blog",
+    "slug": "blog",
+    "description": "Blog posts with categories, tags, SEO fields and scheduled publishing.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 30,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        {
+            "key": "blog",
+            "label": "Blog posts",
+            "actions": [
+                "view",
+                "create",
+                "edit",
+                "delete",
+                "publish",
+                "export"
+            ]
+        },
+        {
+            "key": "categories",
+            "label": "Blog categories",
+            "actions": [
+                "view",
+                "create",
+                "edit",
+                "delete"
+            ]
+        }
+    ],
+    "menu": [
+        {
+            "key": "blog",
+            "group": "Content",
+            "label": "Blog",
+            "icon": "bi-journal-text",
+            "permission": "blog.view",
+            "children": [
+                {
+                    "key": "blog.posts",
+                    "label": "All posts",
+                    "route": "admin.blog.posts.index",
+                    "permission": "blog.view"
+                },
+                {
+                    "key": "blog.add",
+                    "label": "Add post",
+                    "route": "admin.blog.posts.create",
+                    "permission": "blog.create"
+                },
+                {
+                    "key": "blog.categories",
+                    "label": "Categories",
+                    "route": "admin.blog.categories.index",
+                    "permission": "categories.view"
+                }
+            ]
+        }
+    ]
+}

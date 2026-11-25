@@ -1,0 +1,17 @@
+{
+    "name": "Settings",
+    "slug": "settings",
+    "description": "Site name, branding, SEO, mail server, social links, security rules and maintenance mode.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 90,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "settings", "label": "Settings", "actions": ["view", "edit"] }
+    ],
+    "menu": [
+        { "key": "settings", "group": "System", "label": "Settings", "icon": "bi-sliders", "route": "admin.settings.edit", "permission": "settings.view" }
+    ]
+}

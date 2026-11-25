@@ -1,0 +1,13 @@
+<?php
+
+use App\Modules\__Module__\Controllers\Admin\__Model__Controller;
+use Illuminate\Support\Facades\Route;
+
+// Loaded inside the admin group: URL /{admin_path}/__slug__, names "admin.__slug__.*"
+Route::get('__slug__/import', [__Model__Controller::class, 'importForm'])->name('__slug__.import');
+Route::post('__slug__/import', [__Model__Controller::class, 'import'])->name('__slug__.import.store');
+Route::get('__slug__/import/template', [__Model__Controller::class, 'importTemplate'])->name('__slug__.import.template');
+Route::post('__slug__/bulk', [__Model__Controller::class, 'bulk'])->name('__slug__.bulk');
+Route::patch('__slug__/{__model__}/restore', [__Model__Controller::class, 'restore'])->name('__slug__.restore')->withTrashed();
+Route::delete('__slug__/{__model__}/force', [__Model__Controller::class, 'forceDelete'])->name('__slug__.force-delete')->withTrashed();
+__toggleRoute__Route::resource('__slug__', __Model__Controller::class)->except('show')->parameters(['__slug__' => '__model__']);

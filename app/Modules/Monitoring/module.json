@@ -1,0 +1,25 @@
+{
+    "name": "Monitoring",
+    "slug": "monitoring",
+    "description": "Built-in error tracker with alerts, failed queue jobs with retry, and the log file viewer (opcodesio/log-viewer).",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 92,
+    "central": true,
+    "tenant": false,
+    "permissions": [
+        { "key": "monitoring", "label": "Errors & failed jobs", "actions": ["view", "manage"] },
+        { "key": "logs", "label": "Log files", "actions": ["view", "download", "delete"] }
+    ],
+    "menu": [
+        {
+            "key": "monitoring", "group": "System", "label": "Monitoring", "icon": "bi-bug", "permission": "monitoring.view",
+            "children": [
+                { "key": "monitoring.errors", "label": "Error log", "route": "admin.errors.index", "permission": "monitoring.view" },
+                { "key": "monitoring.jobs", "label": "Failed jobs", "route": "admin.failed-jobs.index", "permission": "monitoring.view" },
+                { "key": "monitoring.logs", "label": "Log files", "route": "log-viewer.index", "permission": "logs.view" }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,21 @@
+{{-- Shared by create and edit. Add, remove or reorder fields freely. --}}
+<div class="row g-4">
+    <div class="col-lg-8">
+        <x-admin.card title="__Singular__ details">
+            <div class="d-flex flex-column gap-3">
+__formFields__
+            </div>
+        </x-admin.card>
+    </div>
+    <div class="col-lg-4">
+        <x-admin.card>
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary">{{ $__model__->exists ? 'Save changes' : 'Create __singular__' }}</button>
+                <a href="{{ route('admin.__slug__.index') }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+            @if ($__model__->exists)
+                <div class="small text-secondary mt-3">Created {{ $__model__->created_at?->diffForHumans() }} · updated {{ $__model__->updated_at?->diffForHumans() }}</div>
+            @endif
+        </x-admin.card>
+    </div>
+</div>

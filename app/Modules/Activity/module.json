@@ -1,0 +1,17 @@
+{
+    "name": "Activity log",
+    "slug": "activity",
+    "description": "Audit trail of sign-ins and every change made in the admin panel.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 91,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "activity", "label": "Activity log", "actions": ["view", "delete"] }
+    ],
+    "menu": [
+        { "key": "activity", "group": "System", "label": "Activity log", "icon": "bi-activity", "route": "admin.activity.index", "permission": "activity.view" }
+    ]
+}

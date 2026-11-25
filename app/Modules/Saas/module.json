@@ -1,0 +1,29 @@
+{
+    "name": "SaaS console",
+    "slug": "saas",
+    "description": "Multi-tenant SaaS (SaaS mode only): tenants, plans, subscriptions, invoices, usage, pricing page, signup and payment webhooks. Lives on the central domain.",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": true,
+    "order": 5,
+    "central": true,
+    "tenant": false,
+    "saas_only": true,
+    "permissions": [
+        { "key": "saas", "label": "SaaS console", "actions": ["view", "create", "edit", "delete", "export"] },
+        { "key": "plans", "label": "Plans", "actions": ["view", "create", "edit", "delete"] }
+    ],
+    "menu": [
+        {
+            "key": "saas", "group": "SaaS", "label": "SaaS", "icon": "bi-buildings", "permission": "saas.view", "order": 1,
+            "children": [
+                { "key": "saas.overview", "label": "Overview", "route": "admin.saas.overview", "permission": "saas.view" },
+                { "key": "saas.tenants", "label": "Tenants", "route": "admin.saas.tenants.index", "permission": "saas.view" },
+                { "key": "saas.onboard", "label": "Onboard tenant", "route": "admin.saas.tenants.create", "permission": "saas.create" },
+                { "key": "saas.subscriptions", "label": "Subscriptions", "route": "admin.saas.subscriptions.index", "permission": "saas.view" },
+                { "key": "saas.invoices", "label": "Invoices", "route": "admin.saas.invoices.index", "permission": "saas.view" },
+                { "key": "saas.plans", "label": "Plans", "route": "admin.saas.plans.index", "permission": "plans.view" }
+            ]
+        }
+    ]
+}

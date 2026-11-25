@@ -1,0 +1,24 @@
+{{-- Rows + footer. Reloaded on its own when you search, filter, sort or change page. --}}
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+        <tr>
+            <x-admin.datatable.check-all :table="$table" />
+__tableHeads__
+            <th class="text-end">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        @forelse ($table->rows as $__model__)
+            <tr>
+                <x-admin.datatable.check :table="$table" :value="$__model__->id" />
+__tableCells__
+                <x-admin.datatable.row-actions :table="$table" slug="__slug__" :record="$__model__" label="__singular__" />
+            </tr>
+        @empty
+            <tr><td colspan="99"><x-admin.empty :icon="$table->inTrash() ? 'bi-trash3' : 'bi-inbox'" :message="$table->emptyMessage('__label__')" /></td></tr>
+        @endforelse
+        </tbody>
+    </table>
+</div>
+<x-admin.datatable.footer :table="$table" label="__label__" />

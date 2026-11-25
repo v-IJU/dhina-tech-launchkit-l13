@@ -1,0 +1,18 @@
+<?php
+
+namespace App\Modules\__Module__\Database\Seeders;
+
+use App\Modules\__Module__\Models\__Model__;
+use Illuminate\Database\Seeder;
+
+/**
+ * Demo data for __label__. Run with:
+ * php artisan db:seed --class="App\Modules\__Module__\Database\Seeders\__Model__Seeder"
+ */
+class __Model__Seeder extends Seeder
+{
+    public function run(): void
+    {
+        // __Model__::create([...]);
+    }
+}
