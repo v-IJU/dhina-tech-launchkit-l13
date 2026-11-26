@@ -20,6 +20,7 @@ class ImpersonationController extends Controller
     {
         abort_unless($request->user()->can('users.impersonate'), 403);
         abort_if($user->isSuperAdmin() || $user->is($request->user()), 403, 'This account cannot be impersonated.');
+        abort_unless($request->user()->canManage($user), 403, 'This account has permissions you don\'t have, so you can\'t sign in as it.');
         abort_if($request->session()->has('impersonator_id'), 422, 'Return to your own account first.');
 
         activity('auth')->causedBy($request->user())->performedOn($user)->event('impersonate')->log("Started signing in as {$user->name}");

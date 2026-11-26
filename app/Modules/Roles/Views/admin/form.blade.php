@@ -76,7 +76,8 @@
                                         @if (in_array($action, $resource['actions'], true))
                                             @php $perm = $resource['key'].'.'.$action; @endphp
                                             <input type="checkbox" class="form-check-input m-0" name="permissions[]" value="{{ $perm }}" data-action="{{ $action }}"
-                                                   @checked(in_array($perm, old('permissions', $checked), true)) aria-label="{{ $perm }}">
+                                                   @checked(in_array($perm, old('permissions', $checked), true)) aria-label="{{ $perm }}"
+                                                   @if ($grantable !== null && ! in_array($perm, $grantable, true)) disabled title="You don't have this permission yourself, so you can't give it" @endif>
                                         @else
                                             <span class="text-secondary">—</span>
                                         @endif
@@ -96,7 +97,8 @@
                         @foreach ($special as $perm)
                             <div class="col-md-6 col-xl-4">
                                 <label class="d-flex align-items-center gap-2 border rounded-3 px-3 py-2" style="cursor: pointer">
-                                    <input type="checkbox" class="form-check-input m-0" name="permissions[]" value="{{ $perm }}" data-action="special" @checked(in_array($perm, old('permissions', $checked), true))>
+                                    <input type="checkbox" class="form-check-input m-0" name="permissions[]" value="{{ $perm }}" data-action="special" @checked(in_array($perm, old('permissions', $checked), true))
+                                           @if ($grantable !== null && ! in_array($perm, $grantable, true)) disabled title="You don't have this permission yourself, so you can't give it" @endif>
                                     <code>{{ $perm }}</code>
                                 </label>
                             </div>

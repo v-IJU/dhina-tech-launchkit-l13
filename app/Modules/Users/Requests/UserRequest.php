@@ -71,10 +71,16 @@ class UserRequest extends FormRequest
     {
         return [function (Validator $validator) {
             $super = config('starter.super_admin_role');
-            if ($this->input('role') === $super && ! $this->user()->isSuperAdmin()) {
-                $validator->errors()->add('role', 'Only a super admin can give the super admin role.');
-            }
             $target = $this->route('user');
+            $me = $this->user();
+            $role = (string) $this->input('role');
+            if ($role === $super && ! $me->isSuperAdmin()) {
+                $validator->errors()->add('role', 'Only a super admin can give the super admin role.');
+            } elseif ($target instanceof User && $target->is($me) && ! $me->isSuperAdmin() && ! $me->hasRole($role)) {
+                $validator->errors()->add('role', 'You cannot change your own role.');
+            } elseif ($role !== '' && ! $me->canGiveRole($role) && ! ($target instanceof User && $target->is($me))) {
+                $validator->errors()->add('role', 'This role has permissions you don\'t have, so you can\'t give it.');
+            }
             if ($target instanceof User && $target->is($this->user()) && $this->input('status') !== 'active') {
                 $validator->errors()->add('status', 'You cannot deactivate your own account.');
             }

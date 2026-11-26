@@ -33,11 +33,11 @@ class SecurityHeaders
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         }
 
-        // /docs/api (API documentation) loads its viewer from a CDN, and the log viewer (/admin/logs) uses an
-        // inline script, so those two get no CSP. Both are for signed-in staff only.
+        // /docs/api (API documentation) loads its viewer from a CDN; the log viewer (/admin/logs) and Horizon
+        // (/admin/horizon) use inline scripts and a web font. Those get no CSP. All are for signed-in staff only.
         $exempt = $request->is('docs/*')
-        || $request->is(trim((string) config('log-viewer.route_path'), '/').'*')
-        || $request->is(trim((string) config('horizon.path'), '/').'*');   // new
+            || $request->is(trim((string) config('log-viewer.route_path'), '/').'*')
+            || $request->is(trim((string) config('horizon.path'), '/').'*');
         if (config('starter.csp.enabled') && ! $response->headers->has('Content-Security-Policy') && ! $exempt) {
             $response->headers->set('Content-Security-Policy', $this->policy());
         }

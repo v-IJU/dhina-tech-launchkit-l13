@@ -7,6 +7,7 @@ namespace App\Modules\Roles\Controllers\Admin;
 use App\Core\Menus\MenuService;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
+use App\Models\User;
 use App\Modules\Roles\Support\PermissionCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,7 @@ class RoleController extends Controller implements HasMiddleware
         return view('roles::admin.index', [
             'roles' => $roles,
             'total' => $this->catalog->all()->count(),
+            'grantable' => auth()->user()?->isSuperAdmin() ? null : auth()->user()?->grantablePermissions(),
         ]);
     }
 
@@ -70,7 +72,7 @@ class RoleController extends Controller implements HasMiddleware
             'color' => $data['color'],
         ]);
         $role->save();
-        $role->syncPermissions($this->ensurePermissions($data['permissions'] ?? []));
+        $role->syncPermissions($this->ensurePermissions($this->allowedChange($request, $role, $data['permissions'] ?? [])));
         $this->flush();
 
         activity('roles')->performedOn($role)->event('created')->log("Created role {$role->display_name} with ".count($data['permissions'] ?? []).' permissions');
@@ -78,13 +80,16 @@ class RoleController extends Controller implements HasMiddleware
         return redirect()->route('admin.roles.index')->with('success', "Role “{$role->display_name}” created.");
     }
 
-    public function edit(Role $role): View
+    public function edit(Request $request, Role $role): View
     {
+        $this->guardRole($request, $role);
+
         return view('roles::admin.form', $this->formData($role, $this->rolePermissions($role)));
     }
 
     public function update(Request $request, Role $role): RedirectResponse
     {
+        $this->guardRole($request, $role);
         $data = $this->validated($request, $role);
 
         $role->update([
@@ -94,7 +99,7 @@ class RoleController extends Controller implements HasMiddleware
         ]);
 
         if ($role->name !== config('starter.super_admin_role')) {
-            $role->syncPermissions($this->ensurePermissions($data['permissions'] ?? []));
+            $role->syncPermissions($this->ensurePermissions($this->allowedChange($request, $role, $data['permissions'] ?? [])));
         }
         $this->flush();
 
@@ -103,8 +108,9 @@ class RoleController extends Controller implements HasMiddleware
         return redirect()->route('admin.roles.index')->with('success', "Role “{$role->display_name}” saved. Changes apply immediately.");
     }
 
-    public function destroy(Role $role): RedirectResponse
+    public function destroy(Request $request, Role $role): RedirectResponse
     {
+        $this->guardRole($request, $role);
         if (in_array($role->name, config('starter.system_roles'), true)) {
             return back()->with('error', 'System roles cannot be deleted.');
         }
@@ -148,6 +154,7 @@ class RoleController extends Controller implements HasMiddleware
             'actions' => $this->catalog->standardActions(),
             'special' => $this->catalog->special(),
             'total' => $this->catalog->all()->count(),
+            'grantable' => auth()->user()?->isSuperAdmin() ? null : auth()->user()?->grantablePermissions(),
             'colors' => self::COLORS,
             'copyFrom' => Role::query()->with('permissions')->orderBy('id')->get()->map(fn (Role $r) => [
                 'name' => $r->name,
@@ -181,6 +188,44 @@ class RoleController extends Controller implements HasMiddleware
 
         return collect($names)->filter(fn ($n) => $allowed->contains($n))
             ->map(fn ($n) => Permission::findOrCreate($n, 'web'))->all();
+    }
+
+    /**
+     * You can't edit your own role (or you could give yourself anything), nor a role that has
+     * permissions you don't have. Super admins can edit every role.
+     */
+    private function guardRole(Request $request, Role $role): void
+    {
+        /** @var User $me */
+        $me = $request->user();
+        if ($me->isSuperAdmin()) {
+            return;
+        }
+        abort_if($me->hasRole($role->name), 403, 'You cannot change your own role. Ask a super admin.');
+        abort_unless($me->canGiveRole($role), 403, 'This role has permissions you don\'t have, so you can\'t change it.');
+    }
+
+    /**
+     * Ticked boxes you may grant (permissions you have yourself) + what the role already had that you
+     * can't grant (kept as it was, never silently removed).
+     *
+     * @param  array<int, string>  $wanted
+     * @return array<int, string>
+     */
+    private function allowedChange(Request $request, Role $role, array $wanted): array
+    {
+        /** @var User $me */
+        $me = $request->user();
+        if ($me->isSuperAdmin()) {
+            return $wanted;
+        }
+        $grantable = $me->grantablePermissions();
+        $current = $role->exists ? $role->permissions->pluck('name')->all() : [];
+
+        return array_values(array_unique(array_merge(
+            array_intersect($wanted, $grantable),
+            array_diff($current, $grantable),
+        )));
     }
 
     private function flush(): void

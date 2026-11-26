@@ -62,10 +62,10 @@ if (matrix) {
 
     matrix.addEventListener('change', (e) => {
         if (e.target.matches('[data-row-toggle]')) {
-            e.target.closest('[data-row]').querySelectorAll('input[name="permissions[]"]').forEach((c) => { c.checked = e.target.checked; });
+            e.target.closest('[data-row]').querySelectorAll('input[name="permissions[]"]:not(:disabled)').forEach((c) => { c.checked = e.target.checked; });
         }
         if (e.target.matches('[data-col-toggle]')) {
-            boxes().filter((c) => c.dataset.action === e.target.dataset.colToggle).forEach((c) => { c.checked = e.target.checked; });
+            boxes().filter((c) => !c.disabled && c.dataset.action === e.target.dataset.colToggle).forEach((c) => { c.checked = e.target.checked; });
         }
         refresh();
     });
@@ -73,7 +73,7 @@ if (matrix) {
     document.addEventListener('click', (e) => {
         const all = e.target.closest('[data-select-all]');
         if (!all) return;
-        boxes().forEach((c) => { c.checked = all.dataset.selectAll === '1'; });
+        boxes().filter((c) => !c.disabled).forEach((c) => { c.checked = all.dataset.selectAll === '1'; });   // disabled = not yours to give
         refresh();
     });
 

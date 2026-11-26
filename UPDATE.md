@@ -13,6 +13,7 @@ This update adds these features to an existing project made from the starter. It
 | **Extra permissions per user** | Users → key icon: give one person permissions on top of their role (`users.permissions`) |
 | **Role sidebar preview** | Roles → Add/Edit: live "Sidebar for this role" card while ticking permissions |
 | **Monitoring**          | System → Monitoring → **Error log**, **Failed jobs**, **Log files** (`/admin/logs`); Settings → Monitoring; `/up` and `php artisan health:check` |
+| **No self-promotion** | Managers of roles/users can only give permissions and roles they have themselves, can't edit their own role, and can't edit, delete or sign in as a bigger account (README_DEVELOPER §6.10b) |
 | **Excel import & export** | Laravel Excel (maatwebsite/excel): Import accepts .xlsx/.csv, big files run in the background in chunks with a progress bar and notification; Export → Excel or CSV. Each module has `Imports/` and `Exports/` classes. Settings → Import & export |
 | **Debugbar (local)** | Bar at the bottom of each page with the Blade views, queries and route used (dev dependency only) |
 | **Team chat** | Main → **Team chat**, chat icon in the top bar. Staff 1-to-1 chat with emoji, photos, files, voice notes; realtime over Reverb. Settings → Team chat. Permissions `chat.view` / `chat.start` |
@@ -86,7 +87,7 @@ docker compose run --rm node sh -c "npm install && npm run build"
 # 6. restart the background containers so they load the new code
 docker compose restart horizon scheduler reverb
 
-# 7. check everything: expect "192 passed"
+# 7. check everything: expect "199 passed"
 docker compose exec app php artisan test
 ```
 

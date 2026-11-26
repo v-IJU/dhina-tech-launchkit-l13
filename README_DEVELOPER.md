@@ -545,6 +545,23 @@ $user->getAllPermissions();                            // both = what counts
 
 **When to use which:** a permission that **several people** need belongs in a role. Extras are for the one-off exception. If you find yourself giving the same extra to a third person, make a role.
 
+### 6.10b Nobody can give themselves more power
+
+Anyone who manages roles or users can only hand out what they have themselves. Super admins are not limited.
+
+| Rule | Where |
+|---|---|
+| A role form only lets you tick permissions **you have**; the others are greyed out ("you can't give it"). Ticked boxes you don't have are ignored on save | `RoleController::allowedChange()` |
+| You **can't edit your own role** (you could add anything to it) | `RoleController::guardRole()` |
+| You can't edit or delete a role that has permissions you don't have | `RoleController::guardRole()` |
+| The Users form only offers roles with **no more permissions than you** (`User::canGiveRole()`) | `UserController::roleOptions()`, `UserRequest` |
+| You **can't change your own role** | `UserRequest` |
+| You can't edit, delete, bulk-delete or **sign in as** an account that has permissions you don't have (changing its email or password = taking it over). `User::canManage()` | `UserController`, `ImpersonationController` |
+| Extra permissions for one user: only what you have; extras you can't manage stay as they were | `UserPermissionController` |
+| Excel user import: same role rule, and rows that would change a bigger account are skipped with the reason | `UsersImport` |
+
+In your own code: `$me->canManage($user)`, `$me->canGiveRole('admin')`, `$me->grantablePermissions()`. Tests: `tests/Feature/PermissionEscalationTest.php`.
+
 ### 6.11 Users module features
 
 `app/Modules/Users/`:
@@ -1877,7 +1894,7 @@ Imports above 1,000 rows, emails, notifications and chat broadcasts all need a r
 
 | Question | Where |
 |---|---|
-| Are workers running? | **`/admin/horizon`** (super admin): status *Active* / *Inactive*, supervisors `supervisor-1` and `supervisor-imports`, processes |
+| Are workers running? | **`/admin/horizon`** (super admin; no CSP on this page, like the log viewer): status *Active* / *Inactive*, supervisors `supervisor-1` and `supervisor-imports`, processes |
 | What is waiting / running now? | Horizon → **Pending jobs**, **Completed jobs** (each job's time, queue, payload) |
 | What failed and why? | Horizon → **Failed jobs** (full exception, Retry button), or **Admin → System → Monitoring → Failed jobs** |
 | Queue size per queue | Horizon → **Metrics** / dashboard "Jobs per minute", "Max wait time" |

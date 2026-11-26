@@ -90,6 +90,46 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * May this person edit, delete or impersonate $other? Never someone who has permissions they don't have
+     * (otherwise a manager could take over an admin account by changing its email or password).
+     */
+    public function canManage(User $other): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+        if ($other->isSuperAdmin()) {
+            return false;
+        }
+
+        return $other->getAllPermissions()->pluck('name')->diff($this->getAllPermissions()->pluck('name'))->isEmpty();
+    }
+
+    /** May this person give $role to someone? Only roles with no permission they don't have themselves. */
+    public function canGiveRole(Role|string $role): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+        $role = is_string($role) ? Role::query()->where('name', $role)->first() : $role;
+        if ($role === null || $role->name === config('starter.super_admin_role')) {
+            return false;
+        }
+
+        return $role->permissions->pluck('name')->diff($this->getAllPermissions()->pluck('name'))->isEmpty();
+    }
+
+    /**
+     * Permissions this person may hand out (on roles, or as a user's extra permissions).
+     *
+     * @return list<string>
+     */
+    public function grantablePermissions(): array
+    {
+        return $this->getAllPermissions()->pluck('name')->values()->all();
+    }
+
+    /**
      * @param  Builder<User>  $query
      */
     public function scopeSearch(Builder $query, ?string $term): void

@@ -64,17 +64,17 @@ class UsersImport extends ModuleImport
     }
 
     /**
-     * Roles that may be given here (super admin only by a super admin).
+     * Roles that may be given here: only roles with no more permissions than the person importing.
      *
      * @return list<string>
      */
     private function roles(): array
     {
-        $mayGiveSuperAdmin = (bool) $this->importer()?->isSuperAdmin();
+        $me = $this->importer();
 
-        return Role::query()->pluck('name')
-            ->reject(fn ($name) => $name === config('starter.super_admin_role') && ! $mayGiveSuperAdmin)
-            ->values()->all();
+        return Role::query()->with('permissions')->get()
+            ->filter(fn (Role $role) => $me === null ? $role->name !== config('starter.super_admin_role') : $me->canGiveRole($role))
+            ->pluck('name')->values()->all();
     }
 
     public function saveRow(array $data, ?Model $existing): void
@@ -87,9 +87,13 @@ class UsersImport extends ModuleImport
         }
         $data['name'] = trim(($data['first_name'] ?? $existing?->getAttribute('first_name')).' '.($data['last_name'] ?? $existing?->getAttribute('last_name')));
 
+        $me = $this->importer();
         if ($existing instanceof User) {
-            if ($existing->isSuperAdmin() && ! $this->importer()?->isSuperAdmin()) {
-                throw new \RuntimeException('Only a super admin can change a super admin.');
+            if ($me !== null && ! $me->canManage($existing)) {
+                throw new \RuntimeException('This account has permissions you don\'t have, so you can\'t change it.');
+            }
+            if ($me !== null && $existing->is($me) && $role && ! $me->hasRole($role) && ! $me->isSuperAdmin()) {
+                throw new \RuntimeException('You cannot change your own role.');
             }
             $existing->update($data);
             $user = $existing;

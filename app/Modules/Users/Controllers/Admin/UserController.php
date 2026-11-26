@@ -153,7 +153,7 @@ class UserController extends Controller implements HasMiddleware
         $inTrash = in_array($data['action'], ['restore', 'force-delete'], true);
         $users = User::query()->when($inTrash, fn ($q) => $q->onlyTrashed())
             ->whereKey($data['ids'])->whereKeyNot($request->user()->id)->get()
-            ->reject(fn (User $u) => $u->isSuperAdmin() && ! $request->user()->isSuperAdmin());
+            ->filter(fn (User $u) => $request->user()->canManage($u));
 
         if (in_array($data['action'], ['delete', 'restore', 'force-delete'], true)) {
             abort_unless($request->user()->can('users.delete'), 403);
@@ -202,20 +202,24 @@ class UserController extends Controller implements HasMiddleware
      */
     private function roleOptions(): array
     {
-        $roles = Role::query()->orderBy('id')->get();
-        if (! auth()->user()->isSuperAdmin()) {
-            $roles = $roles->reject(fn ($r) => $r->name === config('starter.super_admin_role'));
-        }
+        /** @var User $me */
+        $me = auth()->user();
+        // Only roles with no more permissions than the person giving them.
+        $roles = Role::query()->with('permissions')->orderBy('id')->get()->filter(fn (Role $r) => $me->canGiveRole($r));
 
         return $roles->mapWithKeys(fn ($r) => [$r->name => $r->display_name ?: $r->name])->all();
     }
 
     /**
-     * Only a super admin may edit or delete another super admin.
+     * Nobody may change an account that has permissions they don't have (super admins: only by a super admin).
      */
     private function guardSuperAdmin(User $user): void
     {
-        abort_if($user->isSuperAdmin() && ! auth()->user()->isSuperAdmin(), 403, 'Only a super admin can change this account.');
+        /** @var User $me */
+        $me = auth()->user();
+        abort_unless($me->canManage($user), 403, $user->isSuperAdmin()
+            ? 'Only a super admin can change this account.'
+            : 'This account has permissions you don\'t have, so you can\'t change it.');
     }
 
     /*

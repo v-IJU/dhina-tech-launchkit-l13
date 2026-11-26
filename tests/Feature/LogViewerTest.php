@@ -40,6 +40,15 @@ class LogViewerTest extends TestCase
         $this->get($this->admin())->assertHeader('Content-Security-Policy');
     }
 
+    public function test_horizon_dashboard_loads_without_the_csp(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        // Horizon's page has an inline script + a web font: with our CSP it would stay blank.
+        $this->get('/'.config('horizon.path'))->assertOk()->assertHeaderMissing('Content-Security-Policy');
+        $this->get(route('admin.dashboard'))->assertHeader('Content-Security-Policy');
+    }
+
     public function test_access_follows_permissions(): void
     {
         // Signed out → admin sign-in page.
