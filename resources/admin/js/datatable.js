@@ -56,13 +56,12 @@ document.querySelectorAll('[data-datatable]').forEach((root) => {
 
     // Keep the export link, reset link and hidden inputs in step with the URL.
     function syncControls(url) {
-        const exportLink = root.querySelector('[data-datatable-export]');
-        if (exportLink) {
+        root.querySelectorAll('[data-datatable-export]').forEach((exportLink) => {
             const exportUrl = new URL(url);
             exportUrl.searchParams.delete('page');
-            exportUrl.searchParams.set('export', 'csv');
+            exportUrl.searchParams.set('export', exportLink.dataset.datatableExport || 'xlsx');
             exportLink.href = exportUrl.toString();
-        }
+        });
 
         const filtered = [...new FormData(form).entries()]
             .some(([key, value]) => !['sort', 'dir', 'per_page', 'trashed'].includes(key) && String(value).trim() !== '');

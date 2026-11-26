@@ -153,6 +153,14 @@ class SettingDefinitions
                     'ai_api_key' => ['type' => 'password', 'label' => 'API key', 'rules' => ['nullable', 'string', 'max:500'], 'hint' => 'Stored encrypted. Empty = use the key from .env (OPENAI_API_KEY, ANTHROPIC_API_KEY…).'],
                 ],
             ],
+            'imports' => [
+                'label' => 'Import & export', 'icon' => 'bi-file-earmark-spreadsheet', 'description' => 'Excel / CSV imports on Users, Customers, FAQs, Sliders… Small files import straight away; bigger ones run in the background (Horizon) in chunks and notify the person when done.',
+                'fields' => [
+                    'import_queue_above' => ['type' => 'number', 'label' => 'Import in the background above (rows)', 'rules' => ['nullable', 'integer', 'min:0', 'max:1000000'], 'default' => 1000, 'hint' => 'Files with more rows run on the queue with a progress bar. 0 = always in the background.'],
+                    'import_chunk_size' => ['type' => 'number', 'label' => 'Rows per chunk', 'rules' => ['nullable', 'integer', 'min:50', 'max:10000'], 'default' => 500, 'hint' => 'Each chunk is one queued job and one database transaction.'],
+                    'import_max_mb' => ['type' => 'number', 'label' => 'Largest upload (MB)', 'rules' => ['nullable', 'integer', 'min:1', 'max:200'], 'default' => 20, 'hint' => 'Also raise upload_max_filesize / post_max_size (php.ini) and client_max_body_size (Nginx) if you go above 25 MB.'],
+                ],
+            ],
             'chat' => [
                 'module' => 'chat',
                 'label' => 'Team chat', 'icon' => 'bi-chat-dots', 'description' => 'Staff chat (Main > Team chat). Who may chat: permission chat.view; who may start new chats: chat.start (Roles, or Users > key icon). Files are private, on CHAT_DISK (local or s3).',

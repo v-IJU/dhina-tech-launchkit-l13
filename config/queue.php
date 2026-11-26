@@ -73,6 +73,17 @@ return [
             'after_commit' => false,
         ],
 
+        // Same Redis, for long jobs (big Excel imports, up to 1 hour). retry_after must be longer than the
+        // job's timeout, otherwise a second worker starts the same import again. See config/starter.php → imports.
+        'redis-imports' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'imports',
+            'retry_after' => 3700,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
         'deferred' => [
             'driver' => 'deferred',
         ],

@@ -89,7 +89,7 @@ class UserManagementTest extends TestCase
         $this->actingAs($this->superAdmin());
 
         $response = $this->get(route('admin.users.index', ['export' => 'csv']))->assertOk();
-        $this->assertStringContainsString('Email', $response->streamedContent());
+        $this->assertStringContainsString('Email', $response->baseResponse->getFile()->getContent());
     }
 
     public function test_impersonate_and_return(): void

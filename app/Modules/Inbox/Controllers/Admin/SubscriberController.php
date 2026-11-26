@@ -5,21 +5,24 @@ declare(strict_types=1);
 namespace App\Modules\Inbox\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Export\TemplateExport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\Inbox\Exports\SubscribersExport;
+use App\Modules\Inbox\Imports\SubscribersImport;
 use App\Modules\Inbox\Models\Subscriber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class SubscriberController extends Controller implements HasMiddleware
 {
-    use HandlesImport;
-
     public static function middleware(): array
     {
         return [
@@ -35,7 +38,7 @@ class SubscriberController extends Controller implements HasMiddleware
             ->search(['email'])
             ->sortable(['email', 'created_at'], default: 'created_at')
             ->dateRange('created_at', 'Subscribed')
-            ->export('subscribers', ['Email' => 'email', 'Subscribed at' => 'created_at'], 'subscribers.export')
+            ->export('subscribers', SubscribersExport::class, 'subscribers.export')   // app/Modules/Inbox/Exports/SubscribersExport.php
             ->bulk(route('admin.subscribers.bulk'), ['delete' => 'subscribers.delete'])
             ->render('inbox::admin.subscribers', 'inbox::admin._subscribers_table');
     }
@@ -61,22 +64,37 @@ class SubscriberController extends Controller implements HasMiddleware
         return back()->with('success', "{$subscriber->email} removed.");
     }
 
-    /**
-     * @return CsvImport<Subscriber>
-     */
-    protected function importer(): CsvImport
+    /*
+    | Import (Excel / CSV). Columns and saving: app/Modules/Inbox/Imports/SubscribersImport.php
+    */
+    public function importForm(): View
     {
-        return CsvImport::make(Subscriber::class)
-            ->matchBy('email')
-            ->column('email', fn (?Subscriber $s) => ['required', 'email', 'max:255', Rule::unique(Subscriber::class, 'email')->ignore($s)], example: 'reader@example.com')
-            ->prepare(fn (array $data) => ['email' => strtolower($data['email'])]);
+        return view('inbox::admin.import', [
+            'columns' => (new SubscribersImport)->describe(),
+            'runs' => ImportRun::recent('subscribers'),
+        ]);
     }
 
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
-     */
-    protected function importPage(): array
+    public function import(Request $request): RedirectResponse
     {
-        return ['title' => 'Subscribers', 'slug' => 'subscribers', 'back' => route('admin.subscribers.index'), 'breadcrumbs' => ['Website CMS', 'Subscribers', 'Import']];
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('subscribers', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new SubscribersImport($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.subscribers.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new SubscribersImport), 'subscribers-import-template.xlsx');
     }
 }

@@ -76,9 +76,15 @@
             <div class="d-flex gap-2 ms-auto">
                 {{ $actions ?? '' }}
                 @if ($table->canExport())
-                    <a href="{{ $table->exportUrl() }}" class="btn btn-outline-secondary text-nowrap" data-datatable-export>
-                        <i class="bi bi-download me-1"></i>Export CSV
-                    </a>
+                    <div class="dropdown">
+                        <button type="button" class="btn btn-outline-secondary text-nowrap dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-download me-1"></i>Export
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ $table->exportUrl('xlsx') }}" data-datatable-export="xlsx"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Excel (.xlsx)</a></li>
+                            <li><a class="dropdown-item" href="{{ $table->exportUrl('csv') }}" data-datatable-export="csv"><i class="bi bi-filetype-csv me-2"></i>CSV</a></li>
+                        </ul>
+                    </div>
                 @endif
             </div>
         </form>

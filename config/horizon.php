@@ -210,6 +210,18 @@ return [
             'timeout' => 60,
             'nice' => 0,
         ],
+
+        // Big Excel / CSV imports (App\Core\Import\RunImport): one at a time, up to an hour each.
+        'supervisor-imports' => [
+            'connection' => 'redis-imports',
+            'queue' => ['imports'],
+            'balance' => false,
+            'maxProcesses' => 1,
+            'memory' => 512,
+            'tries' => 1,
+            'timeout' => 3600,
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [

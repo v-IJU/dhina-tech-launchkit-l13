@@ -36,7 +36,7 @@ Examples use the `art` shortcut: `alias art="docker compose exec app php artisan
 21. [Rules for working on this project](#21-rules-for-working-on-this-project)
 22. [Recipes: common tasks start to finish](#22-recipes-common-tasks-start-to-finish)
 23. [Trash and restore](#23-trash-and-restore)
-24. [CSV import](#24-csv-import)
+24. [Import & export (Laravel Excel)](#24-import--export-laravel-excel) · [Debugbar](#24b-laravel-debugbar-local-only) · [Is the queue running?](#24c-is-the-queue-running-horizon-workers-logs)
 25. [REST API (Sanctum)](#25-rest-api-sanctum)
 26. [Multi-language website](#26-multi-language-website)
 27. [Sign-in history and new-device alerts](#27-sign-in-history-and-new-device-alerts)
@@ -71,7 +71,7 @@ Examples use the `art` shortcut: `alias art="docker compose exec app php artisan
 | Security headers / CSP                          | `app/Http/Middleware/SecurityHeaders.php`                                    |
 | Docker                                          | `compose.yaml`, `docker/php/Dockerfile`, `docker/nginx/default.conf`         |
 | Trash (soft delete) on list pages               | `DataTable::trash()` + module `restore` / `forceDelete` methods (section 23) |
-| CSV import                                      | `app/Core/Import/` + `resources/views/admin/import.blade.php` (section 24)   |
+| Import & export (Laravel Excel)                 | `app/Core/Import/`, `app/Core/Export/`, each module's `Imports/` `Exports/` (section 24) |
 | API auth, token rules                           | `routes/api.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Middleware/ApiAccess.php` |
 | A module's API                                  | `app/Modules/X/Routes/api.php`, `Controllers/Api/`, `Resources/`             |
 | Website languages                               | `config/starter.php` → `locales`, `app/Core/Localization/`, `lang/*.json`    |
@@ -1471,7 +1471,7 @@ docker compose exec app ./vendor/bin/phpstan analyse --memory-limit=1G   # stati
 | `AdminToolsTest`                | Settings, media uploads, menus, activity log, backup tools       |
 | `ModuleGeneratorTest`           | `make:module` output                                             |
 | `DataTableTest`                 | Search, sort, filters, per-page, AJAX, export, bulk, permissions |
-| `TrashAndImportTest`            | Trash tabs, restore, delete forever, `trash:empty`, CSV import (create/update/errors/dry run), user and subscriber import |
+| `TrashAndImportTest`            | Trash tabs, restore, delete forever, `trash:empty`, Excel/CSV import (create/update/errors/dry run/background chunks), user and subscriber import |
 | `ApiTest`                       | Token sign-in, `/me`, revoke, 401/403/422 JSON, filters, CRUD, read-only tokens, API switch, blog API, profile tokens |
 | `LanguagesTest`                 | Switcher, hreflang, RTL, page/post translations, menu labels, single-language site |
 | `LoginHistoryTest`              | Sign-ins and failures recorded, new-device email, lockout alert, history page, profile |
@@ -1635,82 +1635,273 @@ Route::delete('orders/{order}/force', [OrderController::class, 'forceDelete'])->
 
 ---
 
-## 24. CSV import
+## 24. Import & export (Laravel Excel)
 
-**Import** buttons are on Users, Subscribers, Sliders, Services, Testimonials, FAQs and every generated module. Each opens a shared page (`resources/views/admin/import.blade.php`) with:
-- **Upload a file**, with an **Only check the file** option (validates everything, then rolls back, so nothing is saved).
-- **Download template**: a CSV with the right headings.
-- **The column list**, with the rules for each column.
-- **After the upload**: counts of created / updated / skipped / failed rows, plus a table of the failed rows with each error.
+Import and export use **maatwebsite/excel** (Laravel Excel 3.1), the package you know. Every module keeps its own classes, next to its controller:
 
-**How rows are matched:**
-- Headings are matched loosely: `Group name`, `group_name` and `GROUP NAME` are the same column.
-- Unknown columns are ignored, so **Export CSV → edit in Excel → Import** works.
-- A row whose **ID** (or `matchBy` column) exists **updates** that record. Other rows are **created**.
-- When updating, a column that isn't in the file is left as it is.
-- `Yes/No`, `1/0`, `true/false` and `active/inactive` all work for yes/no columns.
-- The delimiter (`,` `;` or tab) is detected automatically, and files saved by older Excel versions (Windows-1252) are converted to UTF-8.
-- Limits: 5,000 rows and 5 MB (`config/starter.php` → `import_max_rows`, `import_max_kb`).
+```
+app/Modules/Faqs/
+├── Controllers/Admin/FaqController.php   importForm() · import() · importTemplate()   (plain, readable)
+├── Imports/FaqsImport.php                columns, rules, how one row is saved
+├── Exports/FaqsExport.php                headings + one row → one line
+└── Views/admin/import.blade.php          the module's own import page
+```
 
-**Permission:** `<slug>.import` (a special permission).
+Modules that have it: Users, Customers, Subscribers, Sliders, Services, Testimonials, FAQs, and every module from `make:module`.
 
-**Pieces:**
+### How an import runs
 
-| File                                   | Job                                                       |
-| -------------------------------------- | --------------------------------------------------------- |
-| `app/Core/Import/CsvImport.php`        | Reads, validates and saves rows; collects errors           |
-| `app/Core/Import/ImportResult.php`     | Counts and errors shown on the page                        |
-| `app/Core/Import/HandlesImport.php`    | Controller trait: `importForm()`, `import()`, `importTemplate()` |
-| `resources/views/admin/import.blade.php` | The page                                                |
+```
+Upload (.xlsx / .xls / .csv)
+  └─ FaqController::import()
+       ├─ ImportRun::start('faqs', $file, $user)   saves the file (private disk), counts the rows, row in import_runs
+       └─ $run->process(new FaqsImport($run))
+            ├─ wrong headings?            → stops with "None of the column headings match…"
+            ├─ ≤ 1,000 rows               → Excel::import() now, in this request (no queue), result on the page
+            └─ > 1,000 rows               → RunImport job on the "imports" queue (config/starter.php → imports)
+                                              the job reads the file chunk by chunk (500 rows, in order),
+                                              progress bar on the import page, bell notification when done
+       per row (FaqsImport): find existing → validate rules() → saveRow() in its own savepoint
+       bad rows are skipped and kept in import_run_errors → "Skipped rows" downloads them as Excel with the reason
+```
 
-**Adding import to a controller:**
+- Thresholds: **Settings → Import & export** (background above N rows, rows per chunk, largest upload).
+- **Only check the file** validates and saves every row inside a transaction that is rolled back: you see exactly what would happen, nothing changes.
+- Headings are matched loosely (Laravel Excel "slug"): `Group name` = `group_name`. Unknown columns are ignored, so **Export → edit in Excel → Import** works.
+- `Yes/No`, `1/0`, `true/false`, `active/inactive` work for yes/no columns; Excel date cells become dates; numbers in text columns (phones) stay text.
+- When **updating**, columns that aren't in the file are left as they are.
+- Each chunk is one database transaction; each row is a savepoint, so one bad row never undoes the others.
+- The queue config is never changed: small files don't use the queue at all; big files are one job on the **imports** queue. Anything a row dispatches (welcome emails, notifications) goes to your normal queue as usual.
+- **Why one job per file, not one job per chunk:** chunks run in order on one worker, so two workers can never import the same email/SKU at the same moment, and updates happen in file order. Memory stays low because only one chunk is loaded at a time.
+- **Own queue for long jobs:** `RunImport::$timeout = 3600`, `$tries = 1`. A queue must let a job run that long, otherwise a second worker picks the same import up again:
+  - **Redis + Horizon (local / Redis servers):** `.env` `IMPORT_QUEUE_CONNECTION=redis-imports`. That connection (`config/queue.php`) has `retry_after` 3700, and Horizon runs it with the `supervisor-imports` supervisor (`config/horizon.php`: 1 process, timeout 3600). Nothing else to start.
+  - **SQS (production):** leave `IMPORT_QUEUE_CONNECTION` empty (= `QUEUE_CONNECTION=sqs`), create an SQS queue named **imports** with **visibility timeout 3600 s or more**, and run a worker for it: `php artisan queue:work sqs --queue=imports --timeout=3600 --tries=1`.
+  - A failed import is never re-run automatically; the import page shows where it stopped.
+- Results: the module's import page shows **Recent imports** (status, progress, counts, skipped rows); `/admin/imports/{id}` is the full result (the bell links there). Kept 30 days (`model:prune`).
+- Permission: `<slug>.import`.
+
+### The import class
 
 ```php
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
-
-class OrderController extends Controller implements HasMiddleware
+// app/Modules/Faqs/Imports/FaqsImport.php
+class FaqsImport extends ModuleImport
 {
-    use HandlesImport;
+    protected ?string $model = Faq::class;
+    protected string $matchBy = 'id';          // a row with a known id updates; "email", "sku"… also fine
 
-    // middleware(): new Middleware('permission:orders.import', only: ['importForm', 'import', 'importTemplate']),
-
-    protected function importer(): CsvImport
+    public function columns(): array           // headings + example (template and help table)
     {
-        return CsvImport::make(Order::class)
-            ->matchBy('order_number')                                   // update existing orders by number
-            ->column('order_number', fn (?Order $o) => ['required', Rule::unique('orders')->ignore($o)], example: 'ORD-1001')
-            ->column('customer_name', ['required', 'string', 'max:120'])
-            ->column('total', ['required', 'numeric', 'min:0'], example: '1499.00')
-            ->column('order_status', ['nullable', Rule::in(array_keys(Order::STATUSES))], label: 'Status')
-            ->prepare(fn (array $data) => $data + ['source' => 'import'])   // optional: change before saving
-            // ->using(fn (array $data, ?Order $existing) => ...)            // optional: custom save
-            ->purify(['notes']);                                        // optional: rich-text columns
+        return ['id' => '', 'question' => 'How long does a project take?', 'answer' => 'Usually 4 to 8 weeks.', 'is_active' => 'Yes'];
     }
 
-    protected function importPage(): array
+    public function rules(?Model $existing): array   // normal validation; $existing = record being updated
     {
-        return ['title' => 'Orders', 'slug' => 'orders', 'back' => route('admin.orders.index'), 'breadcrumbs' => ['Sales', 'Orders', 'Import']];
+        return ['question' => ['required', 'string', 'max:255'], 'answer' => ['required', 'string'], 'is_active' => ['nullable', 'boolean']];
+    }
+
+    public function saveRow(array $data, ?Model $existing): void   // your saving code
+    {
+        $faq = $existing ?? new Faq;
+        $faq->fill($data)->save();
     }
 }
 ```
 
+`ModuleImport` (`app/Core/Import/ModuleImport.php`) is a normal Laravel Excel import (`OnEachRow`, `WithHeadingRow`, `WithChunkReading`, `ShouldQueue`, `WithEvents`). It does the headings, cleaning, validation, counting, errors and progress, so the module class stays short.
+
+**Customising** (all in the module's import class):
+
+| Need | Do |
+|---|---|
+| Unique column | `Rule::unique('products', 'sku')->ignore($existing?->getKey())` in `rules()` |
+| Match on another column | `protected string $matchBy = 'sku';` or override `find(array $row): ?Model` |
+| Relations, stock, several tables | Write it in `saveRow()`. It runs inside a savepoint, so an exception skips only that row |
+| Skip emails/side effects during "only check" | `if (! $this->dryRun()) { … }` |
+| Who uploaded (also in queued jobs) | `$this->importer()` |
+| Bigger/smaller chunks for this module | `public function chunkSize(): int { return 2000; }` |
+| Another queue for one module | `public ?string $queue = 'imports-heavy';` (and a worker / Horizon supervisor for it) |
+| Any other Laravel Excel feature | Add the concern to the class: `WithMultipleSheets`, `WithStartRow`, `WithCalculatedFormulas`, `WithCustomCsvSettings`… |
+| Completely different import | Write a plain Laravel Excel import and call `Excel::import()` / `Excel::queueImport()` yourself in the controller |
+
+### Two kinds of import: row by row, or a chunk at a time
+
+| | `ModuleImport` (row by row) | `ChunkImport` (chunk at a time) |
+|---|---|---|
+| You write | `rules()` + `saveRow($data, $existing)` for **one** row | `importChunk(Collection $rows)` for **500–1,000** rows |
+| Validation | Laravel rules per row, automatic | Yours: check rows, `$this->skip($line, 'reason', $row)` |
+| Queries | a few per row | yours: `whereIn()`, one `update()` / `insertOrIgnore()` / `upsert()` for many rows |
+| Best for | CRUD: FAQs, users, customers, products with a lookup or two | Big lists, matching against other tables: tags by product name, price lists, stock sync, subscribers |
+| In LaunchKit | FAQs, Sliders, Services, Testimonials, Users, Customers, generated modules | **Subscribers** (`app/Modules/Inbox/Imports/SubscribersImport.php`) |
+
+Both share the rest: progress bar, Recent imports, result page, skipped rows download, notification, "only check", background job for big files, the same controller code.
+
 ```php
-// Routes/admin.php (before Route::resource)
-Route::get('orders/import', [OrderController::class, 'importForm'])->name('orders.import');
-Route::post('orders/import', [OrderController::class, 'import'])->name('orders.import.store');
-Route::get('orders/import/template', [OrderController::class, 'importTemplate'])->name('orders.import.template');
+// app/Modules/Inbox/Imports/SubscribersImport.php (shortened)
+class SubscribersImport extends ChunkImport
+{
+    public function columns(): array { return ['email' => 'reader@example.com']; }
+
+    /** $rows keyed by the real Excel row number; values trimmed, empty = null, empty rows removed. */
+    public function importChunk(Collection $rows): void
+    {
+        $emails = [];
+        foreach ($rows as $line => $row) {
+            $email = strtolower((string) $row->get('email'));
+            match (true) {
+                ! filter_var($email, FILTER_VALIDATE_EMAIL) => $this->skip($line, "\"{$email}\" is not a valid email address.", $row),
+                isset($emails[$email]) => $this->skip($line, "Same email as row {$emails[$email]}.", $row),
+                default => $emails[$email] = $line,
+            };
+        }
+
+        foreach (array_chunk(array_keys($emails), 500) as $batch) {
+            $known = DB::table('newsletter_subscribers')->whereIn('email', $batch)->pluck('email')->all();   // 1 query
+            $new = array_diff($batch, $known);
+            DB::table('newsletter_subscribers')->insertOrIgnore(/* rows for $new */);                         // 1 query
+            $this->created(count($new));
+            $this->updated(count($known));
+        }
+    }
+}
 ```
 
-Add `"import"` to the module's actions in `module.json`, run `art module:sync`, and put the button on the list page:
+`ChunkImport` helpers: `$this->created($n)`, `$this->updated($n)`, `$this->skip($line, 'reason', $row)`, `$this->dryRun()`, `$this->importer()`. The whole chunk runs in one savepoint: if `importChunk()` throws, that chunk is undone and listed as one error ("Rows 1002–2001 were not imported: …"), the other chunks stay. Extra values for the import (branch, tags…) go in the constructor and travel with the queued job:
 
-```blade
-@can('orders.import')
-    <a href="{{ route('admin.orders.import') }}" class="btn btn-outline-secondary"><i class="bi bi-upload me-1"></i> Import</a>
-@endcan
+```php
+class FloristTagsImport extends ChunkImport
+{
+    public function __construct(?ImportRun $run = null, private int $branchId = 0, private array $tags = []) { parent::__construct($run); }
+    …
+}
+// controller
+$run->process(new FloristTagsImport($run, $request->integer('branch_id'), $request->input('tags', [])));
 ```
 
-**Users import** matches rows by email. New users get a random password, the "must change password" flag and a welcome email with a link to set their password. Roles are checked: only a super-admin can give the super-admin role.
+Note: a chunk only sees its own rows. "Duplicate of row 12" works inside one chunk; across chunks, check the database (like `$known` above) or keep a set in `Cache::` keyed by the import id.
+
+### The controller (same in every module)
+
+```php
+public function importForm(): View
+{
+    return view('faqs::admin.import', ['columns' => (new FaqsImport)->describe(), 'runs' => ImportRun::recent('faqs')]);
+}
+
+public function import(Request $request): RedirectResponse
+{
+    $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+    $run = ImportRun::start('faqs', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+    $run->process(new FaqsImport($run));    // small: now · big: queued in chunks
+    return redirect()->route('admin.faqs.import')->with('success', 'Import finished: '.$run->summary().'.');
+}
+
+public function importTemplate(): BinaryFileResponse
+{
+    return Excel::download(new TemplateExport(new FaqsImport), 'faqs-import-template.xlsx');
+}
+```
+
+Routes (`Routes/admin.php`, before `Route::resource`): `faqs/import` (GET, POST) and `faqs/import/template`. Button on the list: `@can('faqs.import') <a href="{{ route('admin.faqs.import') }}">Import</a> @endcan`.
+
+### Export
+
+The list's **Export** button offers **Excel (.xlsx)** and **CSV**, with exactly what the list shows (search, filters, sorting, all pages). In the controller:
+
+```php
+->export('faqs', FaqsExport::class, 'faqs.export')       // the module's export class (round-trips with the import)
+->export('activity', ['When' => 'created_at', 'User' => 'causer.name'])   // or a quick column list (reports)
+```
+
+```php
+// app/Modules/Faqs/Exports/FaqsExport.php
+class FaqsExport extends ModuleExport
+{
+    public function headings(): array { return ['ID', 'Question', 'Answer', 'Is active', 'Created']; }
+
+    /** @param  Faq  $faq */
+    public function map($faq): array
+    {
+        return [$faq->id, $faq->question, $faq->answer, $this->yesNo($faq->is_active), $this->date($faq->created_at)];
+    }
+}
+```
+
+`ModuleExport` is `FromQuery` + `WithHeadings` + `WithMapping` + `ShouldAutoSize`: rows are read in chunks, so big tables don't fill memory. Text starting with `=`, `+`, `-` or `@` is never written as a formula (CSV/Excel injection). Add any Laravel Excel concern for styling (`WithStyles`, `WithColumnFormatting`, `WithColumnWidths`…).
+
+**Very large exports** (100k+ rows): queue them instead of downloading in the request:
+
+```php
+(new FaqsExport($query))->queue("exports/faqs-{$user->id}.xlsx", 'local')
+    ->chain([new NotifyExportReady($user, "exports/faqs-{$user->id}.xlsx")]);   // your job: AdminAlert with a download link
+```
+
+### Files
+
+| File | Job |
+|---|---|
+| `app/Core/Import/BaseImport.php` | What both kinds share: headings, chunk size, counts, skipped rows, progress events |
+| `app/Core/Import/ModuleImport.php` | Row-by-row import (`rules()` + `saveRow()`) |
+| `app/Core/Import/ChunkImport.php` | Chunk import (`importChunk($rows)`) |
+| `app/Core/Import/ImportRun.php` + `ImportRunError.php` | One import: file, status, counts, skipped rows; start / process |
+| `app/Core/Import/RunImport.php` | The queued job for big files (timeout, tries, queue name) |
+| `app/Core/Export/ModuleExport.php` | Base for module exports |
+| `app/Core/Export/TableExport.php` | Quick export from a column list |
+| `app/Core/Export/TemplateExport.php`, `FailedRowsExport.php` | Template download, skipped rows download |
+| `resources/views/components/admin/import-history.blade.php` | "Recent imports" table (live progress via `resources/admin/js/imports.js`) |
+| `app/Modules/Dashboard/Controllers/Admin/ImportRunController.php` | `/admin/imports/{id}` result page + progress JSON |
+| `config/excel.php` (package defaults) | Publish with `art vendor:publish --provider="Maatwebsite\Excel\ExcelServiceProvider" --tag=config` to change CSV delimiter, temp files… |
+
+**Several servers (Auto Scaling):** the queued job may run on another server than the upload. Put the import files on shared storage: set `excel.temporary_files.remote_disk` to `s3` (publish the config) and change `ImportRun::DISK` to an S3 disk.
+
+---
+
+## 24b. Laravel Debugbar (local only)
+
+`fruitcake/laravel-debugbar` is installed as a **dev** dependency: a bar at the bottom of every page while `APP_DEBUG=true`.
+
+| Tab | Shows |
+|---|---|
+| **Views** | Every Blade file used for this page, e.g. `faqs::admin.import`, `components.admin.card`, `layouts.admin`. Click one to open it in your editor |
+| Queries | Every SQL query with time and bindings (spot N+1) |
+| Route | Controller + method, middleware, route name |
+| Models, Gate, Cache, Timeline | Models loaded, permission checks, cache hits, where time went |
+
+- `.env`: `DEBUGBAR_ENABLED=` (empty = follows APP_DEBUG; `false` hides it), `DEBUGBAR_EDITOR=vscode`.
+- Docker: to open files from the bar, set `DEBUGBAR_REMOTE_SITES_PATH=/var/www/html` and `DEBUGBAR_LOCAL_SITES_PATH=D:/launchkit-single/launchkit-single` (your project folder).
+- Not on `/api/*`, `/mcp`, `/horizon`, `/docs` (`config/debugbar.php` → `except`).
+- Production never has it: the Docker image runs `composer install --no-dev`. Never set `APP_DEBUG=true` on a live server.
+
+## 24c. Is the queue running? (Horizon, workers, logs)
+
+Imports above 1,000 rows, emails, notifications and chat broadcasts all need a running worker. How to check:
+
+| Question | Where |
+|---|---|
+| Are workers running? | **`/admin/horizon`** (super admin): status *Active* / *Inactive*, supervisors `supervisor-1` and `supervisor-imports`, processes |
+| What is waiting / running now? | Horizon → **Pending jobs**, **Completed jobs** (each job's time, queue, payload) |
+| What failed and why? | Horizon → **Failed jobs** (full exception, Retry button), or **Admin → System → Monitoring → Failed jobs** |
+| Queue size per queue | Horizon → **Metrics** / dashboard "Jobs per minute", "Max wait time" |
+| From the terminal | `art horizon:status` (running / paused / inactive), `art queue:monitor redis:default,redis-imports:imports --max=100` |
+| Health check | `art health:check` → "Queue workers (Horizon): running" (also in Monitoring) |
+
+Worker logs:
+
+```bash
+docker compose ps horizon                      # Up? (restarts automatically: restart: unless-stopped)
+docker compose logs -f horizon                 # live: "Processing App\Core\Import\RunImport", "Processed", errors
+docker compose logs --since 1h horizon         # last hour
+docker compose restart horizon                 # after changing job code (workers keep old code in memory!)
+docker compose exec app php artisan horizon:terminate   # graceful restart (finishes the current job first)
+```
+
+Application errors from jobs also go to `storage/logs/laravel.log` and **Monitoring → Error log** (`/admin/logs` for the raw files).
+
+**SQS (production):** Horizon only works with Redis, so on SQS there is no Horizon dashboard:
+- workers are `php artisan queue:work sqs --queue=default` and `--queue=imports --timeout=3600`, kept alive by Supervisor / systemd (or one container each);
+- logs: `journalctl -u laravel-worker -f` or the container logs; failed jobs: Monitoring → Failed jobs;
+- queue length: AWS console → SQS → "Messages available / in flight", or a CloudWatch alarm on `ApproximateAgeOfOldestMessage`.
+
+**Remember:** after deploying new code, restart workers (`art queue:restart` or `art horizon:terminate`), otherwise they keep running the old code.
 
 ---
 

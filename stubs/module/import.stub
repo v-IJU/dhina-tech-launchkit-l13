@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Imports;
+
+use App\Core\Import\ModuleImport;
+use App\Modules\__Module__\Models\__Model__;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rule;
+use Mews\Purifier\Facades\Purifier;
+
+/**
+ * __Label__ → Import (Excel or CSV). A row with a known ID updates it, other rows are added.
+ * Big files run in the background in chunks; see App\Core\Import\ModuleImport for what the base does.
+ */
+class __Model__Import extends ModuleImport
+{
+    protected ?string $model = __Model__::class;
+
+    protected string $matchBy = 'id';
+
+    /** Columns of the file (headings) with an example, for the template and the help table. */
+    public function columns(): array
+    {
+        return [
+__importExamples__
+        ];
+    }
+
+    public function rules(?Model $existing): array
+    {
+        return [
+__importRules__
+        ];
+    }
+
+    public function saveRow(array $data, ?Model $existing): void
+    {__importPurify__
+        $__model__ = $existing ?? new __Model__;
+        $__model__->fill($data)->save();
+    }
+}

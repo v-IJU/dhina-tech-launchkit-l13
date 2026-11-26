@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Core\Console;
 
 use App\Core\Console\Generator\Field;
+use App\Core\Import\ModuleImport;
 use App\Core\Menus\MenuService;
 use App\Core\Modules\ModuleManager;
 use App\Core\Permissions\PermissionSync;
@@ -96,6 +97,9 @@ class MakeModuleCommand extends Command
             'view.edit.stub' => 'Views/admin/edit.blade.php',
             'view.form.stub' => 'Views/admin/_form.blade.php',
             'view.table.stub' => 'Views/admin/_table.blade.php',
+            'view.import.stub' => 'Views/admin/import.blade.php',
+            'import.stub' => "Imports/{$model}Import.php",
+            'export.stub' => "Exports/{$model}Export.php",
         ];
 
         if ($this->option('api')) {
@@ -230,14 +234,11 @@ class MakeModuleCommand extends Command
             $filters[] = "->filter('{$f->name}', '{$f->label()}', ['1' => 'Yes', '0' => 'No'])";
         }
 
-        $export = ["'ID' => 'id',"];
-        foreach ($fields as $f) {
-            if (in_array($f->type, ['editor', 'image'], true)) {
-                continue;
-            }
-            $export[] = "'{$f->label()}' => '{$f->name}',";
-        }
-        $export[] = "'Created' => 'created_at',";
+        // Export headings = import headings ("group_name" → "Group name"), so a file can go out and back in.
+        $exported = collect($fields)->reject(fn (Field $f) => in_array($f->type, ['editor', 'image'], true));
+        $exportHeadings = collect(['ID'])->merge($exported->map(fn (Field $f) => ModuleImport::heading($f->name)))->push('Created')
+            ->map(fn ($h) => "'".addslashes($h)."'")->implode(', ');
+        $exportMap = array_merge(['$row->id,'], $exported->map(fn (Field $f) => $f->exportValue())->all(), ['$this->date($row->created_at),']);
 
         $bulk = $active
             ? ['activate' => "'{$slug}.edit'", 'deactivate' => "'{$slug}.edit'", 'delete' => "'{$slug}.delete'"]
@@ -306,7 +307,8 @@ PHP : '';
             '__defaultSort__' => $hasSortOrder ? 'sort_order' : 'created_at',
             '__defaultDir__' => $hasSortOrder ? 'asc' : 'desc',
             '__filters__' => $filters ? $indent($filters, 12)."\n" : '',
-            '__exportColumns__' => $indent($export, 16),
+            '__exportHeadings__' => $exportHeadings,
+            '__exportMap__' => $indent($exportMap, 12),
             '__bulkPermissions__' => collect($bulk)->map(fn ($perm, $action) => "'{$action}' => {$perm}")->implode(', '),
             '__bulkActionList__' => collect(array_keys($bulk))->map(fn ($a) => "'{$a}'")->implode(', '),
             '__bulkList__' => implode(', ', array_keys($bulk)),
@@ -340,7 +342,11 @@ PHP,
                 "#[QueryParameter('to', description: 'Created to (YYYY-MM-DD)', type: 'string', format: 'date')]",
             ])), 4)."\n",
             '__apiOptions__' => $options ? "\n    /**\n     * Options for filters on related records.\n     *\n     * @return array<string, mixed>\n     */\n    private function options(): array\n    {\n        return [\n".$indent($options, 12)."\n        ];\n    }\n" : '',
-            '__importColumns__' => $indent(array_values(array_filter(array_map(fn (Field $f) => $f->importColumn($table, $model), $fields))), 12),
+            '__importExamples__' => $indent(array_merge(["'id' => '',"], array_values(array_filter(array_map(fn (Field $f) => $f->importExample(), $fields)))), 12),
+            '__importRules__' => $indent(array_values(array_filter(array_map(fn (Field $f) => $f->importRule($table), $fields))), 12),
+            '__importPurify__' => collect($fields)->contains(fn (Field $f) => $f->type === 'editor')
+                ? "\n        foreach ([".collect($fields)->filter(fn (Field $f) => $f->type === 'editor')->map(fn (Field $f) => "'{$f->name}'")->implode(', ')."] as \$field) {\n            if (isset(\$data[\$field])) {\n                \$data[\$field] = Purifier::clean(\$data[\$field]); // rich text: safe HTML only\n            }\n        }\n"
+                : '',
             '__orderBy__' => collect($fields)->contains(fn (Field $f) => $f->name === 'sort_order') ? "->orderBy('sort_order')->latest()" : '->latest()',
             '__bulkUpdate__' => $bulkUpdate,
             '__uploads__' => implode(', ', collect($fields)->filter(fn (Field $f) => $f->type === 'image')->map(fn (Field $f) => "'{$f->name}'")->all()),

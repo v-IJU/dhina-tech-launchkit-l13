@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Sliders\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
+use App\Core\Export\TemplateExport;
 use App\Core\Http\StoresUploads;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\Sliders\Exports\SlidersExport;
+use App\Modules\Sliders\Imports\SlidersImport;
 use App\Modules\Sliders\Models\Slider;
 use App\Modules\Sliders\Requests\StoreSliderRequest;
 use App\Modules\Sliders\Requests\UpdateSliderRequest;
@@ -18,12 +20,14 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 use Mews\Purifier\Facades\Purifier;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class SliderController extends Controller implements HasMiddleware
 {
-    use HandlesImport, StoresUploads;
+    use StoresUploads;
 
     /** @var array<int, string> File inputs saved to storage/app/public/sliders */
     private array $uploads = ['image'];
@@ -53,16 +57,7 @@ class SliderController extends Controller implements HasMiddleware
             ->sortable(['title', 'subtitle', 'button_text', 'button_url', 'is_active', 'created_at'], default: 'sort_order', direction: 'asc')
             ->status('is_active')
             ->dateRange('created_at')
-            ->export('sliders', [
-                'ID' => 'id',
-                'Title' => 'title',
-                'Subtitle' => 'subtitle',
-                'Button text' => 'button_text',
-                'Button url' => 'button_url',
-                'Sort order' => 'sort_order',
-                'Is active' => 'is_active',
-                'Created' => 'created_at',
-            ], 'sliders.export')
+            ->export('sliders', SlidersExport::class, 'sliders.export')   // app/Modules/Sliders/Exports/SlidersExport.php
             ->trash('sliders.delete')
             ->bulk(route('admin.sliders.bulk'), ['activate' => 'sliders.edit', 'deactivate' => 'sliders.edit', 'delete' => 'sliders.delete'])
             ->render('sliders::admin.index', 'sliders::admin._table');
@@ -153,31 +148,6 @@ class SliderController extends Controller implements HasMiddleware
     }
 
     /**
-     * Columns accepted by "Import CSV" (same headings as Export CSV).
-     *
-     * @return CsvImport<Slider>
-     */
-    protected function importer(): CsvImport
-    {
-        return CsvImport::make(Slider::class)
-            ->column('title', ['required', 'string', 'max:255'], example: 'Spring offer')
-            ->column('subtitle', ['nullable', 'string', 'max:255'])
-            ->column('button_text', ['nullable', 'string', 'max:255'])
-            ->column('button_url', ['nullable', 'string', 'max:255'])
-            ->column('sort_order', ['nullable', 'integer'], example: '1')
-            ->column('is_active', ['nullable', 'boolean'], example: 'Yes')
-            ->matchBy('id');
-    }
-
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
-     */
-    protected function importPage(): array
-    {
-        return ['title' => 'Sliders', 'slug' => 'sliders', 'back' => route('admin.sliders.index'), 'breadcrumbs' => ['Website CMS', 'Sliders', 'Import']];
-    }
-
-    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -202,5 +172,39 @@ class SliderController extends Controller implements HasMiddleware
         return [
 
         ];
+    }
+
+    /*
+    | Import (Excel / CSV). Columns and saving: app/Modules/Sliders/Imports/SlidersImport.php
+    */
+    public function importForm(): View
+    {
+        return view('sliders::admin.import', [
+            'columns' => (new SlidersImport)->describe(),
+            'runs' => ImportRun::recent('sliders'),
+        ]);
+    }
+
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('sliders', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new SlidersImport($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.sliders.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new SlidersImport), 'sliders-import-template.xlsx');
     }
 }

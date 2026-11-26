@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Customers\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Export\TemplateExport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\Customers\Exports\CustomersExport;
+use App\Modules\Customers\Imports\CustomersImport;
 use App\Modules\Customers\Models\Customer;
 use App\Modules\Customers\Notifications\CustomerResetPassword;
 use App\Modules\Customers\Requests\CustomerRequest;
@@ -19,6 +21,8 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -27,8 +31,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class CustomerController extends Controller implements HasMiddleware
 {
-    use HandlesImport;
-
     public static function middleware(): array
     {
         return [
@@ -52,19 +54,7 @@ class CustomerController extends Controller implements HasMiddleware
                 fn ($query, string $value) => $value === 'on' ? $query->whereNotNull('two_factor_confirmed_at') : $query->whereNull('two_factor_confirmed_at'))
             ->filter('marketing', 'Marketing', ['yes' => 'Opted in'], fn ($query) => $query->where('marketing_opt_in', true))
             ->dateRange('created_at', 'Joined')
-            ->export('customers', [
-                'ID' => 'id',
-                'Name' => 'name',
-                'Email' => 'email',
-                'Phone' => 'phone',
-                'Status' => 'status',
-                'Email confirmed' => fn (Customer $c) => $c->email_verified_at ? 'yes' : 'no',
-                '2FA' => fn (Customer $c) => $c->two_factor_confirmed_at ? 'on' : 'off',
-                'Marketing' => fn (Customer $c) => $c->marketing_opt_in ? 'yes' : 'no',
-                'Addresses' => 'addresses_count',
-                'Last login' => 'last_login_at',
-                'Joined' => 'created_at',
-            ], 'customers.export')
+            ->export('customers', CustomersExport::class, 'customers.export')   // app/Modules/Customers/Exports/CustomersExport.php
             ->trash('customers.delete')
             ->bulk(route('admin.customers.bulk'), ['activate' => 'customers.edit', 'block' => 'customers.edit', 'delete' => 'customers.delete'])
             ->render('customers::admin.index', 'customers::admin._table');
@@ -176,51 +166,6 @@ class CustomerController extends Controller implements HasMiddleware
     }
 
     /**
-     * "Import CSV": rows are matched by email. New customers get a set-password email
-     * and count as confirmed (staff vouch for the address).
-     *
-     * @return CsvImport<Customer>
-     */
-    protected function importer(): CsvImport
-    {
-        return CsvImport::make(Customer::class)
-            ->matchBy('email')
-            ->column('name', ['required', 'string', 'max:255'], example: 'Anita Raj')
-            ->column('email', fn (?Customer $c) => ['required', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($c)], example: 'anita@example.com')
-            ->column('phone', ['nullable', 'string', 'max:30'], example: '9876543210')
-            ->column('status', ['nullable', Rule::in(array_keys(Customer::STATUSES))], example: 'active')
-            ->column('marketing_opt_in', ['nullable', 'boolean'], example: '0')
-            ->column('notes', ['nullable', 'string', 'max:2000'])
-            ->using(function (array $data, ?Customer $customer) {
-                $data['email'] = strtolower($data['email'] ?? (string) $customer?->email);
-
-                if ($customer) {
-                    $customer->update($data);
-
-                    return;
-                }
-
-                $customer = new Customer($data + ['status' => 'active']);
-                $customer->password = Str::password(32);
-                $customer->email_verified_at = now();
-                $customer->save();
-                $customer->notify(new CustomerResetPassword(Password::broker('customers')->createToken($customer), newAccount: true));
-            });
-    }
-
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>, help: string}
-     */
-    protected function importPage(): array
-    {
-        return [
-            'title' => 'Customers', 'slug' => 'customers', 'back' => route('admin.customers.index'),
-            'breadcrumbs' => ['Customers', 'Import'],
-            'help' => 'Rows are matched by <strong>email</strong>. New customers get an email with a link to set their password.',
-        ];
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function customerData(CustomerRequest $request): array
@@ -229,5 +174,39 @@ class CustomerController extends Controller implements HasMiddleware
         $data['marketing_opt_in'] = $request->boolean('marketing_opt_in');
 
         return $data;
+    }
+
+    /*
+    | Import (Excel / CSV). Columns and saving: app/Modules/Customers/Imports/CustomersImport.php
+    */
+    public function importForm(): View
+    {
+        return view('customers::admin.import', [
+            'columns' => (new CustomersImport)->describe(),
+            'runs' => ImportRun::recent('customers'),
+        ]);
+    }
+
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('customers', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new CustomersImport($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.customers.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new CustomersImport), 'customers-import-template.xlsx');
     }
 }

@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\Faqs\Models\Faq;
 use Illuminate\Support\Facades\Hash;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class DataTableTest extends TestCase
@@ -80,12 +82,20 @@ class DataTableTest extends TestCase
         $this->actingAs($this->superAdmin());
         Faq::query()->first()->update(['question' => '=HYPERLINK("http://evil")', 'is_active' => true]);
 
-        $csv = $this->get($this->admin('faqs?export=csv&status=1'))->assertOk()->streamedContent();
+        $csv = $this->get($this->admin('faqs?export=csv&status=1'))->assertOk()->assertDownload()->baseResponse->getFile()->getContent();
         $lines = array_values(array_filter(explode("\n", trim($csv))));
 
         $this->assertStringContainsString('Question', $lines[0]);
         $this->assertCount(1 + Faq::query()->where('is_active', true)->count(), $lines);
         $this->assertStringContainsString("'=HYPERLINK", $csv, 'formulas are neutralised');
+
+        // Excel: a real .xlsx with the same rows, the formula stored as plain text
+        $file = $this->get($this->admin('faqs?export=xlsx&status=1'))->assertOk()->baseResponse->getFile()->getPathname();
+        $sheet = IOFactory::load($file)->getActiveSheet();
+        $this->assertSame('Question', $sheet->getCell('B1')->getValue());
+        $cells = collect($sheet->toArray())->flatten();
+        $this->assertTrue($cells->contains('=HYPERLINK("http://evil")'));
+        $this->assertSame(DataType::TYPE_STRING, collect($sheet->getRowIterator())->flatMap(fn ($r) => iterator_to_array($r->getCellIterator()))->first(fn ($c) => $c->getValue() === '=HYPERLINK("http://evil")')?->getDataType());
     }
 
     public function test_export_needs_permission(): void
@@ -140,7 +150,7 @@ class DataTableTest extends TestCase
         $this->get($this->admin('subscribers'))->assertOk()->assertSee('data-datatable', false);
         $this->get($this->admin('activity?event=login'))->assertOk()->assertSee('data-datatable', false);
 
-        $csv = $this->get($this->admin('blog/posts?export=csv'))->assertOk()->streamedContent();
+        $csv = $this->get($this->admin('blog/posts?export=csv'))->assertOk()->assertDownload()->baseResponse->getFile()->getContent();
         $this->assertStringContainsString('Title', $csv);
     }
 

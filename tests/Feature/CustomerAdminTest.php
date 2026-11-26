@@ -29,7 +29,7 @@ class CustomerAdminTest extends TestCase
         $this->get($this->admin('customers?verified=no'))->assertSee('New Nila')->assertDontSee('Anita Raj');
         $this->get($this->admin('customers?q=anita'))->assertSee('Anita Raj')->assertDontSee('Blocked Bob');
 
-        $csv = $this->get($this->admin('customers?export=csv'))->assertOk()->streamedContent();
+        $csv = $this->get($this->admin('customers?export=csv'))->assertOk()->assertDownload()->baseResponse->getFile()->getContent();
         $this->assertStringContainsString('anita@example.com', $csv);
 
         // Editors have no customer permissions by default.
@@ -141,7 +141,7 @@ class CustomerAdminTest extends TestCase
 
         $csv = "Name,Email,Phone,Status\nNew Name,old@example.com,,active\nFresh Face,fresh@example.com,9000000001,active\n";
         $this->post(route('admin.customers.import.store'), ['file' => UploadedFile::fake()->createWithContent('c.csv', $csv), 'dry_run' => 0])
-            ->assertOk()->assertSee('1 created, 1 updated', false);
+            ->assertSessionHas('success', 'Import finished: 1 created, 1 updated.');
         $this->assertSame('New Name', $existing->fresh()->name);
         Notification::assertSentTo(Customer::query()->where('email', 'fresh@example.com')->firstOrFail(), CustomerResetPassword::class);
 

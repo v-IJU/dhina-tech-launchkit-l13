@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Testimonials\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
+use App\Core\Export\TemplateExport;
 use App\Core\Http\StoresUploads;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\Testimonials\Exports\TestimonialsExport;
+use App\Modules\Testimonials\Imports\TestimonialsImport;
 use App\Modules\Testimonials\Models\Testimonial;
 use App\Modules\Testimonials\Requests\StoreTestimonialRequest;
 use App\Modules\Testimonials\Requests\UpdateTestimonialRequest;
@@ -18,12 +20,14 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 use Mews\Purifier\Facades\Purifier;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class TestimonialController extends Controller implements HasMiddleware
 {
-    use HandlesImport, StoresUploads;
+    use StoresUploads;
 
     /** @var array<int, string> File inputs saved to storage/app/public/testimonials */
     private array $uploads = ['photo'];
@@ -53,15 +57,7 @@ class TestimonialController extends Controller implements HasMiddleware
             ->sortable(['client_name', 'company', 'rating', 'is_active', 'created_at'], default: 'created_at', direction: 'desc')
             ->status('is_active')
             ->dateRange('created_at')
-            ->export('testimonials', [
-                'ID' => 'id',
-                'Client name' => 'client_name',
-                'Company' => 'company',
-                'Rating' => 'rating',
-                'Quote' => 'quote',
-                'Is active' => 'is_active',
-                'Created' => 'created_at',
-            ], 'testimonials.export')
+            ->export('testimonials', TestimonialsExport::class, 'testimonials.export')   // app/Modules/Testimonials/Exports/TestimonialsExport.php
             ->trash('testimonials.delete')
             ->bulk(route('admin.testimonials.bulk'), ['activate' => 'testimonials.edit', 'deactivate' => 'testimonials.edit', 'delete' => 'testimonials.delete'])
             ->render('testimonials::admin.index', 'testimonials::admin._table');
@@ -152,30 +148,6 @@ class TestimonialController extends Controller implements HasMiddleware
     }
 
     /**
-     * Columns accepted by "Import CSV" (same headings as Export CSV).
-     *
-     * @return CsvImport<Testimonial>
-     */
-    protected function importer(): CsvImport
-    {
-        return CsvImport::make(Testimonial::class)
-            ->column('client_name', ['required', 'string', 'max:255'], example: 'Anita R.')
-            ->column('company', ['nullable', 'string', 'max:255'])
-            ->column('rating', ['nullable', 'integer', 'between:1,5'], example: '5')
-            ->column('quote', ['required', 'string'], example: 'Great team to work with.')
-            ->column('is_active', ['nullable', 'boolean'], example: 'Yes')
-            ->matchBy('id');
-    }
-
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
-     */
-    protected function importPage(): array
-    {
-        return ['title' => 'Testimonials', 'slug' => 'testimonials', 'back' => route('admin.testimonials.index'), 'breadcrumbs' => ['Website CMS', 'Testimonials', 'Import']];
-    }
-
-    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -200,5 +172,39 @@ class TestimonialController extends Controller implements HasMiddleware
         return [
 
         ];
+    }
+
+    /*
+    | Import (Excel / CSV). Columns and saving: app/Modules/Testimonials/Imports/TestimonialsImport.php
+    */
+    public function importForm(): View
+    {
+        return view('testimonials::admin.import', [
+            'columns' => (new TestimonialsImport)->describe(),
+            'runs' => ImportRun::recent('testimonials'),
+        ]);
+    }
+
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('testimonials', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new TestimonialsImport($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.testimonials.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new TestimonialsImport), 'testimonials-import-template.xlsx');
     }
 }

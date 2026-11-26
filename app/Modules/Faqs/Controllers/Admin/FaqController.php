@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Faqs\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
+use App\Core\Export\TemplateExport;
 use App\Core\Http\StoresUploads;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\Faqs\Exports\FaqsExport;
+use App\Modules\Faqs\Imports\FaqsImport;
 use App\Modules\Faqs\Models\Faq;
 use App\Modules\Faqs\Requests\StoreFaqRequest;
 use App\Modules\Faqs\Requests\UpdateFaqRequest;
@@ -18,12 +20,14 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 use Mews\Purifier\Facades\Purifier;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class FaqController extends Controller implements HasMiddleware
 {
-    use HandlesImport, StoresUploads;
+    use StoresUploads;
 
     /** @var array<int, string> File inputs saved to storage/app/public/faqs */
     private array $uploads = [];
@@ -43,7 +47,7 @@ class FaqController extends Controller implements HasMiddleware
     }
 
     /**
-     * List page. Search, sorting, filters, per-page, CSV export and bulk actions
+     * List page. Search, sorting, filters, per-page, Excel/CSV export and bulk actions
      * all come from the query string; see app/Core/DataTable/DataTable.php.
      */
     public function index(Request $request): Response
@@ -53,15 +57,7 @@ class FaqController extends Controller implements HasMiddleware
             ->sortable(['question', 'group_name', 'sort_order', 'is_active', 'created_at'], default: 'sort_order', direction: 'asc')
             ->status('is_active')
             ->dateRange('created_at')
-            ->export('faqs', [
-                'ID' => 'id',
-                'Question' => 'question',
-                'Answer' => 'answer',
-                'Group name' => 'group_name',
-                'Sort order' => 'sort_order',
-                'Is active' => 'is_active',
-                'Created' => 'created_at',
-            ], 'faqs.export')
+            ->export('faqs', FaqsExport::class, 'faqs.export')   // app/Modules/Faqs/Exports/FaqsExport.php
             ->trash('faqs.delete')
             ->bulk(route('admin.faqs.bulk'), ['activate' => 'faqs.edit', 'deactivate' => 'faqs.edit', 'delete' => 'faqs.delete'])
             ->render('faqs::admin.index', 'faqs::admin._table');
@@ -151,28 +147,38 @@ class FaqController extends Controller implements HasMiddleware
         return back()->with('success', 'FAQ '.($faq->is_active ? 'activated' : 'deactivated').'.');
     }
 
-    /**
-     * Columns accepted by "Import CSV" (same headings as Export CSV).
-     *
-     * @return CsvImport<Faq>
-     */
-    protected function importer(): CsvImport
+    /*
+    | Import (Excel / CSV). The columns and saving are in app/Modules/Faqs/Imports/FaqsImport.php.
+    */
+    public function importForm(): View
     {
-        return CsvImport::make(Faq::class)
-            ->column('question', ['required', 'string', 'max:255'], example: 'How long does a project take?')
-            ->column('answer', ['required', 'string'], example: 'Usually 4 to 8 weeks.')
-            ->column('group_name', ['nullable', 'string', 'max:255'], example: 'General')
-            ->column('sort_order', ['nullable', 'integer'], example: '1')
-            ->column('is_active', ['nullable', 'boolean'], example: 'Yes')
-            ->matchBy('id');
+        return view('faqs::admin.import', [
+            'columns' => (new FaqsImport)->describe(),
+            'runs' => ImportRun::recent('faqs'),
+        ]);
     }
 
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
-     */
-    protected function importPage(): array
+    public function import(Request $request): RedirectResponse
     {
-        return ['title' => 'FAQs', 'slug' => 'faqs', 'back' => route('admin.faqs.index'), 'breadcrumbs' => ['Website CMS', 'FAQs', 'Import']];
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('faqs', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new FaqsImport($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.faqs.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new FaqsImport), 'faqs-import-template.xlsx');
     }
 
     /**

@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Import\ImportRun;
+use App\Core\Import\RunImport;
+use App\Core\Settings\SettingsRepository;
 use App\Models\User;
 use App\Modules\Faqs\Models\Faq;
 use App\Modules\Inbox\Models\Subscriber;
 use App\Notifications\WelcomeUser;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
+use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\HeadingRowImport;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class TrashAndImportTest extends TestCase
@@ -110,14 +119,16 @@ class TrashAndImportTest extends TestCase
     {
         $this->actingAs($this->superAdmin());
 
-        $this->get(route('admin.faqs.import'))->assertOk()->assertSee('Download template')->assertSee('Question');
-        $template = $this->get(route('admin.faqs.import.template'))->assertOk()->streamedContent();
-        $this->assertStringContainsString('Question', $template);
+        $this->get(route('admin.faqs.import'))->assertOk()->assertSee('Download template')->assertSee('Question')->assertSee('Recent imports');
+        $template = $this->get(route('admin.faqs.import.template'))->assertOk()->assertDownload('faqs-import-template.xlsx');
+        $rows = Excel::toArray(new HeadingRowImport, $template->baseResponse->getFile()->getPathname());
+        $this->assertSame(['id', 'question', 'answer', 'group_name', 'sort_order', 'is_active'], $rows[0][0]);
     }
 
     public function test_import_creates_updates_and_reports_errors(): void
     {
-        $this->actingAs($this->superAdmin());
+        $boss = $this->superAdmin();
+        $this->actingAs($boss);
         $existing = $this->faq('Old question');
 
         $csv = "ID,Question,Answer,Group name,Is active,Created\n"
@@ -127,13 +138,35 @@ class TrashAndImportTest extends TestCase
             .",,,,,\n";
 
         $this->post(route('admin.faqs.import.store'), ['file' => $this->csv($csv), 'dry_run' => 0])
-            ->assertOk()
-            ->assertSee('1 created, 1 updated, 1 skipped (empty), 1 with errors', false)
-            ->assertSee('Line 4');
+            ->assertRedirect(route('admin.faqs.import'))
+            ->assertSessionHas('success', 'Import finished: 1 created, 1 updated, 1 failed.');
 
         $this->assertSame('Updated question', $existing->fresh()->question);
         $this->assertFalse($existing->fresh()->is_active);
         $this->assertDatabaseHas('faqs', ['question' => 'Brand new?', 'group_name' => 'General', 'is_active' => true]);
+
+        $run = ImportRun::query()->latest('id')->firstOrFail();
+        $this->assertSame(['done', 3, 1], [$run->status, $run->processed_rows, $run->failed_rows]);
+        $this->assertSame(4, $run->errors()->value('row'));
+
+        // result page + skipped rows as a spreadsheet to fix
+        $this->get(route('admin.imports.show', $run))->assertOk()->assertSee('The question field is required');
+        $this->getJson(route('admin.imports.show', $run))->assertJson(['status' => 'done', 'percent' => 100]);
+        $this->get(route('admin.imports.errors', $run))->assertDownload();
+        $this->get(route('admin.faqs.import'))->assertSee('import.csv')->assertSee('1 created, 1 updated, 1 failed');
+    }
+
+    public function test_excel_file_is_imported(): void
+    {
+        $this->actingAs($this->superAdmin());
+        $path = tempnam(sys_get_temp_dir(), 'x').'.xlsx';
+        $sheet = new Spreadsheet;
+        $sheet->getActiveSheet()->fromArray([['Question', 'Answer', 'Sort order', 'Is active'], ['From Excel?', 'Yes', 3, 'yes'], ['=HYPERLINK("x")', 'Formula?', 4, 'no']]);
+        (new Xlsx($sheet))->save($path);
+
+        $this->post(route('admin.faqs.import.store'), ['file' => new UploadedFile($path, 'faqs.xlsx', null, null, true)])
+            ->assertSessionHas('success', 'Import finished: 2 created.');
+        $this->assertDatabaseHas('faqs', ['question' => 'From Excel?', 'sort_order' => 3, 'is_active' => true]);
     }
 
     public function test_dry_run_saves_nothing(): void
@@ -141,7 +174,7 @@ class TrashAndImportTest extends TestCase
         $this->actingAs($this->superAdmin());
 
         $this->post(route('admin.faqs.import.store'), ['file' => $this->csv("Question;Answer\nCheck only?;Yes\n"), 'dry_run' => 1])
-            ->assertOk()->assertSee('Nothing was saved');
+            ->assertSessionHas('success', 'Check finished, nothing was saved: 1 created.');
 
         $this->assertDatabaseMissing('faqs', ['question' => 'Check only?']);
     }
@@ -151,7 +184,107 @@ class TrashAndImportTest extends TestCase
         $this->actingAs($this->superAdmin());
 
         $this->post(route('admin.faqs.import.store'), ['file' => $this->csv("Foo,Bar\n1,2\n")])
-            ->assertOk()->assertSee('None of the column headings match');
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'None of the column headings match'));
+    }
+
+    public function test_big_files_run_in_the_background_and_notify(): void
+    {
+        config(['queue.default' => 'database']);
+        app(SettingsRepository::class)->set(['import_queue_above' => 2, 'import_chunk_size' => 50]);
+        $boss = $this->superAdmin();
+        $this->actingAs($boss);
+
+        $csv = "Question,Answer\n".collect(range(1, 120))->map(fn ($i) => "Question {$i}?,Answer {$i}")->implode("\n")."\n,no question\n";
+        $this->post(route('admin.faqs.import.store'), ['file' => $this->csv($csv)])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'started in the background (121 rows)'));
+
+        $run = ImportRun::query()->latest('id')->firstOrFail();
+        $this->assertTrue($run->queued);
+        $this->assertSame(0, Faq::query()->count(), 'nothing imported yet: waiting for the queue');
+
+        $this->artisan('queue:work', ['--stop-when-empty' => true, '--memory' => 4096, '--queue' => 'imports,default']); // high memory limit: the whole test suite runs in one process
+
+        $run->refresh();
+        $this->assertSame(['done', 121, 120, 1], [$run->status, $run->processed_rows, $run->created_rows, $run->failed_rows]);
+        $this->assertSame(120, Faq::query()->count());
+        $this->assertStringContainsString('Faqs import finished: 120 created, 1 failed', (string) $boss->notifications()->first()?->data['message']);
+    }
+
+    public function test_small_import_never_changes_the_queue_for_other_jobs(): void
+    {
+        config(['queue.default' => 'database']);   // like SQS in production
+        $this->actingAs($this->superAdmin());
+
+        $this->post(route('admin.users.import.store'), ['file' => $this->csv("First name,Email,Username,Role\nAnita,anita@example.com,anita,editor\n")])
+            ->assertSessionHas('success', 'Import finished: 1 created.');
+
+        // imported right away, but the welcome email still went to the queue (not sent inside the request)
+        $this->assertDatabaseHas('users', ['email' => 'anita@example.com']);
+        $this->assertSame('database', config('queue.default'));
+        $this->assertSame(1, DB::table('jobs')->where('payload', 'like', '%WelcomeUser%')->count());
+    }
+
+    public function test_big_import_is_one_job_on_the_default_queue(): void
+    {
+        config(['queue.default' => 'database']);
+        Queue::fake();
+        app(SettingsRepository::class)->set(['import_queue_above' => 1]);
+        $this->actingAs($this->superAdmin());
+
+        $this->post(route('admin.faqs.import.store'), ['file' => $this->csv("Question,Answer\nA?,1\nB?,2\n")])->assertSessionHas('success');
+
+        Queue::assertPushed(RunImport::class, 1);
+        Queue::assertPushed(RunImport::class, fn ($job) => $job->connection === null && $job->queue === 'imports'); // default connection, own queue
+    }
+
+    public function test_chunk_import_works_on_whole_chunks_with_real_row_numbers(): void
+    {
+        app(SettingsRepository::class)->set(['import_chunk_size' => 50]);
+        $this->actingAs($this->superAdmin());
+        Subscriber::query()->create(['email' => 'known@example.com']);
+
+        // 130 rows in chunks of 50 (rows 2-51, 52-101, 102-151). reader5 again in chunk 3 = already on the
+        // list by then, so "updated"; reader120 twice inside chunk 3 = duplicate row; empty row ignored.
+        $lines = collect(range(1, 120))->map(fn ($i) => "reader{$i}@example.com")
+            ->push('KNOWN@example.com', 'not-an-email', '', 'reader5@example.com', 'reader120@example.com')
+            ->push(...array_fill(0, 5, 'late@example.com'));
+        $this->post(route('admin.subscribers.import.store'), ['file' => $this->csv("Email\n".$lines->implode("\n")."\n")])
+            ->assertSessionHas('success', 'Import finished: 121 created, 2 updated, 6 failed.');
+
+        $this->assertSame(122, Subscriber::query()->count());
+        $run = ImportRun::query()->latest('id')->firstOrFail();
+        $errors = $run->errors()->orderBy('row')->get();
+        $this->assertSame([123, 126, 128, 129, 130, 131], $errors->pluck('row')->all());
+        $this->assertStringContainsString('not a valid email', $errors->firstWhere('row', 123)->messages[0]);
+        $this->assertStringContainsString('Same email as row 121', $errors->firstWhere('row', 126)->messages[0]);
+        $this->assertStringContainsString('Same email as row 127', $errors->firstWhere('row', 131)->messages[0]);
+    }
+
+    public function test_chunk_import_runs_in_the_background_too(): void
+    {
+        config(['queue.default' => 'database']);
+        app(SettingsRepository::class)->set(['import_queue_above' => 10, 'import_chunk_size' => 50]);
+        $this->actingAs($this->superAdmin());
+
+        $csv = "Email\n".collect(range(1, 200))->map(fn ($i) => "fan{$i}@example.com")->implode("\n")."\nbroken\n";
+        $this->post(route('admin.subscribers.import.store'), ['file' => $this->csv($csv)])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'started in the background (201 rows)'));
+        $this->assertSame(0, Subscriber::query()->count());
+
+        $this->artisan('queue:work', ['--stop-when-empty' => true, '--memory' => 4096, '--queue' => 'imports,default']);
+
+        $run = ImportRun::query()->latest('id')->firstOrFail();
+        $this->assertSame(['done', 201, 200, 1], [$run->status, $run->processed_rows, $run->created_rows, $run->failed_rows]);
+        $this->assertSame(202, $run->errors()->value('row'));
+    }
+
+    public function test_chunk_import_check_only_saves_nothing(): void
+    {
+        $this->actingAs($this->superAdmin());
+
+        $this->post(route('admin.subscribers.import.store'), ['file' => $this->csv("Email\na@example.com\nb@example.com\n"), 'dry_run' => 1])
+            ->assertSessionHas('success', 'Check finished, nothing was saved: 2 created.');
+        $this->assertSame(0, Subscriber::query()->count());
     }
 
     public function test_import_needs_permission(): void
@@ -177,7 +310,7 @@ class TrashAndImportTest extends TestCase
             ."Bad,Role,bad@example.com,bad,owner,active\n";
 
         $this->post(route('admin.users.import.store'), ['file' => $this->csv($csv), 'dry_run' => 0])
-            ->assertOk()->assertSee('1 created');
+            ->assertSessionHas('success', 'Import finished: 1 created, 1 failed.');
 
         $anita = User::query()->where('email', 'anita@example.com')->firstOrFail();
         $this->assertTrue($anita->hasRole('editor'));
@@ -191,7 +324,7 @@ class TrashAndImportTest extends TestCase
         Subscriber::query()->create(['email' => 'known@example.com']);
 
         $this->post(route('admin.subscribers.import.store'), ['file' => $this->csv("Email\nknown@example.com\nnew@example.com\nnot-an-email\n"), 'dry_run' => 0])
-            ->assertOk()->assertSee('1 created, 1 updated', false);
+            ->assertSessionHas('success', 'Import finished: 1 created, 1 updated, 1 failed.');
 
         $this->assertDatabaseHas('newsletter_subscribers', ['email' => 'new@example.com']);
     }

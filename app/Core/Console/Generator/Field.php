@@ -122,7 +122,8 @@ final class Field
     /**
      * "->column(...)" line for the CSV importer, or null for fields that can't be imported (images).
      */
-    public function importColumn(string $table, string $model): ?string
+    /** Validation line for the module's Imports/{Model}Import.php rules(). */
+    public function importRule(string $table): ?string
     {
         if ($this->type === 'image') {
             return null;
@@ -147,12 +148,40 @@ final class Field
         });
 
         if ($this->unique) {
-            $rules[] = "Rule::unique('{$table}', '{$this->name}')->ignore(\$existing)";
-
-            return "->column('{$this->name}', fn (?{$model} \$existing) => [".implode(', ', $rules).'])';
+            $rules[] = "Rule::unique('{$table}', '{$this->name}')->ignore(\$existing?->getKey())";
         }
 
-        return "->column('{$this->name}', [".implode(', ', $rules).'])';
+        return "'{$this->name}' => [".implode(', ', $rules).'],';
+    }
+
+    /** Example value in the import template. */
+    public function importExample(): ?string
+    {
+        if ($this->type === 'image') {
+            return null;
+        }
+        $example = match ($this->type) {
+            'boolean' => 'Yes',
+            'integer', 'foreignId' => '1',
+            'decimal' => '10.50',
+            'date' => '2026-01-31',
+            'datetime' => '2026-01-31 09:00:00',
+            'email' => 'name@example.com',
+            'url' => 'https://example.com',
+            default => '',
+        };
+
+        return "'{$this->name}' => '{$example}',";
+    }
+
+    /** One value in the module's Exports/{Model}Export.php map(). */
+    public function exportValue(): string
+    {
+        return match ($this->type) {
+            'boolean' => "\$this->yesNo(\$row->{$this->name}),",
+            'date', 'datetime' => "\$this->date(\$row->{$this->name}),",
+            default => "\$row->{$this->name},",
+        };
     }
 
     public function cast(): ?string

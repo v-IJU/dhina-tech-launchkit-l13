@@ -3,6 +3,19 @@
 return [
 
     /*
+    | Big Excel / CSV imports run as one long job (up to an hour). They get their own queue so a long
+    | import never blocks emails and other short jobs, and so the queue can allow long jobs:
+    |   SQS (production): leave the connection empty and create an SQS queue "imports" with a
+    |                     visibility timeout of 3600 s or more.
+    |   Redis + Horizon:  IMPORT_QUEUE_CONNECTION=redis-imports (config/queue.php, retry_after 3700;
+    |                     Horizon runs it with the "imports" supervisor in config/horizon.php).
+    */
+    'imports' => [
+        'connection' => env('IMPORT_QUEUE_CONNECTION') ?: null,   // null = QUEUE_CONNECTION
+        'queue' => env('IMPORT_QUEUE', 'imports'),
+    ],
+
+    /*
     | URL prefix of the admin panel. Change it to hide the login page,
     | e.g. ADMIN_PATH=control-room  ->  https://site.com/control-room/login
     */
@@ -110,12 +123,6 @@ return [
     'shop_api_versions' => [
         'v1' => 'Routes/shop.php',
     ],
-
-    /*
-    | CSV import limits (Import buttons on list pages).
-    */
-    'import_max_rows' => 5000,
-    'import_max_kb' => 5120,
 
     /*
     | Where browsers reach Laravel Reverb (used by the Content-Security-Policy).

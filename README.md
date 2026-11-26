@@ -148,7 +148,7 @@ app/
 ├── Core/                      The engine, shared by every module
 │   ├── Console/               starter:install, make:module (+ Generator/), module:list|enable|disable|sync, health:check
 │   ├── DataTable/             search / sort / filter / export engine behind every list page
-│   ├── Import/                CSV import (check first, row-by-row errors)
+│   ├── Import/ Export/        Laravel Excel bases: module imports (chunks, queue, progress) and exports
 │   ├── Menus/                 MenuItem model + MenuService (admin sidebar, website menus)
 │   ├── Modules/               Module, ModuleManager (which modules are on, per tenant/plan), ModuleServiceProvider
 │   ├── Monitoring/            ErrorRecorder (error log + alerts)
@@ -186,7 +186,7 @@ config/starter.php             starter settings: admin path, menu groups, API ve
 config/tenancy.php             SaaS: central domains, tenant databases, what is isolated per tenant
 database/                      core migrations + seeders (DatabaseSeeder, TenantDatabaseSeeder, DemoContentSeeder)
 stubs/module/                  templates for make:module: edit them to change generated code
-tests/Feature/                 185 tests (single business + SaaS + convert + AI + passkeys + chat)
+tests/Feature/                 192 tests (single business + SaaS + convert + AI + passkeys + chat)
 docker/                        Dockerfile (dev + production targets), nginx, php.ini
 compose.yaml                   local stack       compose.prod.yaml + deploy.sh   servers
 ```
@@ -411,7 +411,7 @@ To let AI do something new in your module, write one tool class (extend `App\Mod
 ## 9. Tests and code quality
 
 ```bash
-art test                                          # 185 tests
+art test                                          # 192 tests
 art test --filter=SaasTest                        # one class
 docker compose exec app ./vendor/bin/pint         # code style (fixes files)
 docker compose exec app ./vendor/bin/phpstan analyse --memory-limit=1G    # Larastan
@@ -455,6 +455,8 @@ HTTPS, RDS, S3, Auto Scaling: [DEPLOY.md](DEPLOY.md). SaaS DNS (wildcard) and ga
 | Package | Used for |
 | --- | --- |
 | laravel/fortify | sign-in, 2FA, password reset |
+| maatwebsite/excel | Excel / CSV import (chunked, queued) and export, per module |
+| fruitcake/laravel-debugbar (dev) | debug bar locally: views, queries, route |
 | laravel/passkeys | passkey sign-in (fingerprint, Face ID) for staff and customers |
 | laravel/sanctum | API tokens |
 | dedoc/scramble | API docs at `/docs/api` |

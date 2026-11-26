@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Core\DataTable;
 
+use App\Core\Export\ModuleExport;
+use App\Core\Export\TableExport;
 use Closure;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,24 +16,25 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Server-side list table: search, sort, filters, date range, per-page,
- * CSV export and bulk actions, driven by plain query-string parameters.
+ * Excel/CSV export and bulk actions, driven by plain query-string parameters.
  *
  *   return DataTable::of(Faq::query(), $request)
  *       ->search(['question', 'answer'])
  *       ->sortable(['question', 'sort_order', 'created_at'], default: 'sort_order', direction: 'asc')
  *       ->status('is_active')
  *       ->dateRange('created_at')
- *       ->export('faqs', ['ID' => 'id', 'Question' => 'question'], 'faqs.export')
+ *       ->export('faqs', FaqsExport::class, 'faqs.export')   // or a quick column list: ['ID' => 'id', 'Question' => 'question']
  *       ->bulk(route('admin.faqs.bulk'), ['activate' => 'faqs.edit', 'deactivate' => 'faqs.edit', 'delete' => 'faqs.delete'])
  *       ->trash('faqs.delete')
  *       ->render('faqs::admin.index', 'faqs::admin._table');
  *
- * Query string: ?q=&sort=&dir=&per_page=&from=&to=&<filter>=&trashed=1&export=csv
+ * Query string: ?q=&sort=&dir=&per_page=&from=&to=&<filter>=&trashed=1&export=xlsx|csv
  * Requests with the "X-DataTable" header get only the table partial (used by datatable.js).
  *
  * @template TModel of Model
@@ -76,8 +79,8 @@ class DataTable
 
     private ?string $exportName = null;
 
-    /** @var array<string, string|Closure> */
-    private array $exportColumns = [];
+    /** @var array<string, string|Closure>|class-string<ModuleExport> */
+    private array|string $exportColumns = [];
 
     private ?string $exportPermission = null;
 
@@ -185,13 +188,14 @@ class DataTable
     }
 
     /**
-     * Enable "Export CSV" with the current filters and sorting.
-     * Columns: heading => attribute (dot notation for relations) or closure($row).
+     * Enable "Export" (Excel or CSV) with the current filters and sorting. $columns is either the module's
+     * export class (FaqsExport::class, extends App\Core\Export\ModuleExport) or a quick list
+     * heading => attribute (dot notation for relations) or closure($row).
      *
-     * @param  array<string, string|Closure>  $columns
+     * @param  array<string, string|Closure>|class-string<ModuleExport>  $columns
      * @return $this
      */
-    public function export(string $filename, array $columns, ?string $permission = null): static
+    public function export(string $filename, array|string $columns, ?string $permission = null): static
     {
         $this->exportName = $filename;
         $this->exportColumns = $columns;
@@ -247,8 +251,9 @@ class DataTable
      */
     public function render(string $view, string $partial, array $data = []): Response
     {
-        if ($this->request->query('export') === 'csv' && $this->canExport()) {
-            return $this->download();
+        $format = $this->request->query('export');
+        if (in_array($format, ['xlsx', 'csv'], true) && $this->canExport()) {
+            return $this->download($format);
         }
 
         $this->rows = $this->apply()->paginate($this->currentPerPage())->withQueryString();
@@ -465,9 +470,9 @@ class DataTable
             && ($this->exportPermission === null || (bool) $this->request->user()?->can($this->exportPermission));
     }
 
-    public function exportUrl(): string
+    public function exportUrl(string $format = 'xlsx'): string
     {
-        return $this->url(['export' => 'csv', 'page' => null]);
+        return $this->url(['export' => $format, 'page' => null]);
     }
 
     public function resetUrl(): string
@@ -549,36 +554,14 @@ class DataTable
         }
     }
 
-    private function download(): StreamedResponse
+    private function download(string $format): BinaryFileResponse
     {
         $query = $this->apply();
-        $columns = $this->exportColumns;
+        $export = is_string($this->exportColumns)
+            ? new ($this->exportColumns)($query)
+            : new TableExport($query, $this->exportColumns);
+        $export->csv = $format === 'csv';
 
-        return response()->streamDownload(function () use ($query, $columns) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel shows accents correctly
-            fputcsv($out, array_keys($columns));
-
-            foreach ($query->lazy(500) as $row) {
-                fputcsv($out, array_map(fn ($column) => $this->exportValue($row, $column), array_values($columns)));
-            }
-            fclose($out);
-        }, $this->exportName.'-'.now()->format('Y-m-d-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
-    }
-
-    private function exportValue(Model $row, string|Closure $column): string
-    {
-        $value = $column instanceof Closure ? $column($row) : data_get($row, $column);
-
-        $value = match (true) {
-            $value instanceof \DateTimeInterface => $value->format('Y-m-d H:i:s'),
-            is_bool($value) => $value ? 'Yes' : 'No',
-            $value instanceof \BackedEnum => (string) $value->value,
-            is_array($value) => implode(', ', $value),
-            default => (string) $value,
-        };
-
-        // Stop spreadsheet apps from running cell content as a formula.
-        return preg_match('/^[=+\-@\t\r]/', $value) ? "'".$value : $value;
+        return Excel::download($export, $this->exportName.'-'.now()->format('Y-m-d-His').'.'.$format);
     }
 }

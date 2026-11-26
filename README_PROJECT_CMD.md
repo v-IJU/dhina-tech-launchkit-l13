@@ -256,7 +256,7 @@ Every list page (generated modules, Users, Blog posts, Pages, Subscribers, Activ
 | Filters             | Status dropdown, one dropdown per `foreignId`/boolean field, any custom `->filter()`                  |
 | Date range          | "Created from / to"                                                                                   |
 | Per page            | "Show 10 / 15 / 25 / 50 / 100" in the footer                                                          |
-| Export CSV          | Exports **what you are looking at**: same search, filters and sort (all pages). Needs `<slug>.export` |
+| Export (Excel / CSV) | Exports **what you are looking at**: same search, filters and sort (all pages). Needs `<slug>.export` |
 | Bulk actions        | Tick rows → Activate / Deactivate / Delete (each checked against `<slug>.edit` / `<slug>.delete`)     |
 | No page reloads     | Only the rows are fetched; the URL updates, so refresh, back button and shared links all work         |
 
@@ -965,14 +965,19 @@ Full explanations are in `README_DEVELOPER.md` sections 23–27. These are the c
 | Change auto-empty                     | Settings → Maintenance → *Empty the trash after (days)* (0 = keep forever)   |
 | Empty now                             | `art trash:empty --days=1` deletes forever everything trashed more than a day ago |
 
-### CSV import
+### Import (Excel / CSV)
 
 | Do                                    | How                                                                         |
 | ------------------------------------- | --------------------------------------------------------------------------- |
-| Import                                | **Import** button on the list → upload → keep *Only check* ticked first     |
-| Get the right headings                | **Download template**, or use **Export CSV** and edit that file             |
+| Import                                | **Import** button on the list → upload .xlsx or .csv (tick *Only check* to test first) |
+| Get the right headings                | **Download template**, or **Export → Excel** and edit that file             |
+| Big file                              | More than 1,000 rows run in the background on the **imports** queue: locally `dc up -d horizon` (supervisor-imports), SQS: `queue:work sqs --queue=imports --timeout=3600` |
+| Is the queue running?                 | `/admin/horizon`, `dc logs -f horizon`, `art horizon:status` (README_DEVELOPER §24c) |
+| Skipped rows                          | Import page → Recent imports → **Skipped rows** (Excel with the reason), fix, import again |
 | Permission                            | `<slug>.import`: tick it under Roles → Special permissions                  |
-| Limits                                | `config/starter.php` → `import_max_rows` (5000), `import_max_kb` (5120)     |
+| Limits                                | Settings → Import & export (background above, rows per chunk, max MB)       |
+| Code                                  | `app/Modules/<Module>/Imports/*Import.php`, `Exports/*Export.php` (README_DEVELOPER §24) |
+| Which Blade file is this page?        | Debugbar (local) → **Views** tab (README_DEVELOPER §24b)                     |
 
 ### API
 

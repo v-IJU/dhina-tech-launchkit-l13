@@ -35,7 +35,9 @@ class SecurityHeaders
 
         // /docs/api (API documentation) loads its viewer from a CDN, and the log viewer (/admin/logs) uses an
         // inline script, so those two get no CSP. Both are for signed-in staff only.
-        $exempt = $request->is('docs/*') || $request->is(trim((string) config('log-viewer.route_path'), '/').'*');
+        $exempt = $request->is('docs/*')
+        || $request->is(trim((string) config('log-viewer.route_path'), '/').'*')
+        || $request->is(trim((string) config('horizon.path'), '/').'*');   // new
         if (config('starter.csp.enabled') && ! $response->headers->has('Content-Security-Policy') && ! $exempt) {
             $response->headers->set('Content-Security-Policy', $this->policy());
         }

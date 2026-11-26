@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Services\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
+use App\Core\Export\TemplateExport;
 use App\Core\Http\StoresUploads;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\Services\Exports\ServicesExport;
+use App\Modules\Services\Imports\ServicesImport;
 use App\Modules\Services\Models\Service;
 use App\Modules\Services\Requests\StoreServiceRequest;
 use App\Modules\Services\Requests\UpdateServiceRequest;
@@ -18,12 +20,14 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 use Mews\Purifier\Facades\Purifier;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class ServiceController extends Controller implements HasMiddleware
 {
-    use HandlesImport, StoresUploads;
+    use StoresUploads;
 
     /** @var array<int, string> File inputs saved to storage/app/public/services */
     private array $uploads = [];
@@ -53,15 +57,7 @@ class ServiceController extends Controller implements HasMiddleware
             ->sortable(['title', 'icon', 'sort_order', 'is_active', 'created_at'], default: 'sort_order', direction: 'asc')
             ->status('is_active')
             ->dateRange('created_at')
-            ->export('services', [
-                'ID' => 'id',
-                'Title' => 'title',
-                'Icon' => 'icon',
-                'Summary' => 'summary',
-                'Sort order' => 'sort_order',
-                'Is active' => 'is_active',
-                'Created' => 'created_at',
-            ], 'services.export')
+            ->export('services', ServicesExport::class, 'services.export')   // app/Modules/Services/Exports/ServicesExport.php
             ->trash('services.delete')
             ->bulk(route('admin.services.bulk'), ['activate' => 'services.edit', 'deactivate' => 'services.edit', 'delete' => 'services.delete'])
             ->render('services::admin.index', 'services::admin._table');
@@ -152,30 +148,6 @@ class ServiceController extends Controller implements HasMiddleware
     }
 
     /**
-     * Columns accepted by "Import CSV" (same headings as Export CSV).
-     *
-     * @return CsvImport<Service>
-     */
-    protected function importer(): CsvImport
-    {
-        return CsvImport::make(Service::class)
-            ->column('title', ['required', 'string', 'max:255'], example: 'Web development')
-            ->column('icon', ['nullable', 'string', 'max:255'], example: 'bi-code-slash')
-            ->column('summary', ['nullable', 'string'])
-            ->column('sort_order', ['nullable', 'integer'], example: '1')
-            ->column('is_active', ['nullable', 'boolean'], example: 'Yes')
-            ->matchBy('id');
-    }
-
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
-     */
-    protected function importPage(): array
-    {
-        return ['title' => 'Services', 'slug' => 'services', 'back' => route('admin.services.index'), 'breadcrumbs' => ['Website CMS', 'Services', 'Import']];
-    }
-
-    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -200,5 +172,39 @@ class ServiceController extends Controller implements HasMiddleware
         return [
 
         ];
+    }
+
+    /*
+    | Import (Excel / CSV). Columns and saving: app/Modules/Services/Imports/ServicesImport.php
+    */
+    public function importForm(): View
+    {
+        return view('services::admin.import', [
+            'columns' => (new ServicesImport)->describe(),
+            'runs' => ImportRun::recent('services'),
+        ]);
+    }
+
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('services', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new ServicesImport($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.services.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new ServicesImport), 'services-import-template.xlsx');
     }
 }

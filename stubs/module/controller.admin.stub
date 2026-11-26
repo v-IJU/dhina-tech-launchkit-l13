@@ -6,9 +6,11 @@ namespace App\Modules\__Module__\Controllers\Admin;
 
 use App\Core\DataTable\DataTable;
 use App\Core\Http\StoresUploads;
-use App\Core\Import\CsvImport;
-use App\Core\Import\HandlesImport;
+use App\Core\Export\TemplateExport;
+use App\Core\Import\ImportRun;
 use App\Http\Controllers\Controller;
+use App\Modules\__Module__\Exports\__Model__Export;
+use App\Modules\__Module__\Imports\__Model__Import;
 use App\Modules\__Module__\Models\__Model__;
 use App\Modules\__Module__\Requests\Store__Model__Request;
 use App\Modules\__Module__\Requests\Update__Model__Request;
@@ -19,12 +21,14 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 use Mews\Purifier\Facades\Purifier;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 class __Model__Controller extends Controller implements HasMiddleware
 {
-    use HandlesImport, StoresUploads;
+    use StoresUploads;
 
     /** @var array<int, string> File inputs saved to storage/app/public/__slug__ */
     private array $uploads = [__uploads__];
@@ -44,7 +48,7 @@ class __Model__Controller extends Controller implements HasMiddleware
     }
 
     /**
-     * List page. Search, sorting, filters, per-page, CSV export and bulk actions
+     * List page. Search, sorting, filters, per-page, Excel/CSV export and bulk actions
      * all come from the query string; see app/Core/DataTable/DataTable.php.
      */
     public function index(Request $request): Response
@@ -53,9 +57,7 @@ class __Model__Controller extends Controller implements HasMiddleware
             ->search([__searchColumns__])
             ->sortable([__sortColumns__], default: '__defaultSort__', direction: '__defaultDir__')
 __filters__            ->dateRange('created_at')
-            ->export('__slug__', [
-__exportColumns__
-            ], '__slug__.export')
+            ->export('__slug__', __Model__Export::class, '__slug__.export')   // Exports/__Model__Export.php
             ->bulk(route('admin.__slug__.bulk'), [__bulkPermissions__])
             ->trash('__slug__.delete')
             ->render('__slug__::admin.index', '__slug__::admin._table');
@@ -136,25 +138,38 @@ __bulkUpdate__
         return back()->with('success', $items->count()." item(s) {$done}.");
     }
 __toggle__
-    /**
-     * Columns accepted by "Import CSV" (same headings as Export CSV).
-     *
-     * @return CsvImport<__Model__>
-     */
-    protected function importer(): CsvImport
+    /*
+    | Import (Excel / CSV). Columns and saving: Imports/__Model__Import.php
+    */
+    public function importForm(): View
     {
-        return CsvImport::make(__Model__::class)
-__importColumns__
-            ->purify($this->richText)
-            ->matchBy('id');
+        return view('__slug__::admin.import', [
+            'columns' => (new __Model__Import)->describe(),
+            'runs' => ImportRun::recent('__slug__'),
+        ]);
     }
 
-    /**
-     * @return array{title: string, slug: string, back: string, breadcrumbs: array<int, string>}
-     */
-    protected function importPage(): array
+    public function import(Request $request): RedirectResponse
     {
-        return ['title' => '__Label__', 'slug' => '__slug__', 'back' => route('admin.__slug__.index'), 'breadcrumbs' => ['__group__', '__Label__', 'Import']];
+        $request->validate(['file' => ImportRun::fileRules(), 'dry_run' => ['nullable', 'boolean']]);
+
+        $run = ImportRun::start('__slug__', $request->file('file'), $request->user(), dryRun: $request->boolean('dry_run'));
+        $run->process(new __Model__Import($run));   // small file: now · big file: queued in chunks
+
+        return redirect()->route('admin.__slug__.import')->with(
+            $run->status === 'failed' ? 'error' : 'success',
+            match (true) {
+                $run->status === 'failed' => 'The file could not be imported: '.$run->message,
+                $run->queued => 'Import started in the background ('.number_format($run->total_rows).' rows). You will get a notification when it is done.',
+                $run->dry_run => 'Check finished, nothing was saved: '.$run->summary().'.',
+                default => 'Import finished: '.$run->summary().'.',
+            },
+        );
+    }
+
+    public function importTemplate(): BinaryFileResponse
+    {
+        return Excel::download(new TemplateExport(new __Model__Import), '__slug__-import-template.xlsx');
     }
 
     /**

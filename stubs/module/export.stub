@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\__Module__\Exports;
+
+use App\Core\Export\ModuleExport;
+use App\Modules\__Module__\Models\__Model__;
+
+/**
+ * __Label__ list → Export (Excel / CSV), with the list's current search and filters.
+ * Same headings as __Model__Import, so an exported file can be edited and imported back.
+ */
+class __Model__Export extends ModuleExport
+{
+    public function headings(): array
+    {
+        return [__exportHeadings__];
+    }
+
+    /** @param  __Model__  $row */
+    public function map($row): array
+    {
+        return [
+__exportMap__
+        ];
+    }
+}
