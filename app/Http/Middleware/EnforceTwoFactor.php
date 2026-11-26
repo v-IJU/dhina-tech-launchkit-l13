@@ -28,6 +28,7 @@ class EnforceTwoFactor
         if (
             $required
             && ! $user->two_factor_confirmed_at
+            && ! $user->hasPasskeysEnabled()                            // a passkey counts as strong sign-in
             && ! $request->session()->has('impersonator_id')
             && ! $request->routeIs('admin.profile.*', 'logout', 'two-factor.*', 'password.confirm*', 'user-password.update')
         ) {

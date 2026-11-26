@@ -6,9 +6,11 @@ namespace App\Modules\Saas\Support;
 
 use App\Core\Tenancy\Tenancy;
 use App\Models\User;
+use App\Modules\Ai\Support\AiUsage;
 use App\Modules\Customers\Models\Customer;
 use App\Modules\Saas\Models\Plan;
 use App\Modules\Saas\Models\TenantUsage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -38,7 +40,9 @@ final class PlanLimits
             'users' => [self::count('users'), $tenant->limit('users')],
             'customers' => [self::count('customers'), $tenant->limit('customers')],
             'storage_mb' => [$storage, $tenant->limit('storage_mb')],
-        ];
+        ] + (module_enabled('ai') ? [
+            'ai_tokens' => [Schema::hasTable('ai_usage_logs') ? app(AiUsage::class)->monthTokens() : 0, $tenant->limit('ai_tokens')],
+        ] : []);
     }
 
     public static function ensureCanAdd(string $key): void

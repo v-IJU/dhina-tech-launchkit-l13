@@ -44,6 +44,7 @@ class ProfileController extends Controller
             'tab' => in_array($request->query('tab'), ['profile', 'security'], true) ? $request->query('tab') : 'profile',
             'sessions' => $sessions,
             'tokens' => $user->tokens()->latest()->get(),
+            'passkeys' => $user->passkeys()->latest()->get(),
             'logins' => LoginEvent::query()->where('user_id', $user->id)->whereIn('event', ['login', 'failed', 'lockout'])->latest('id')->limit(10)->get(),
         ]);
     }
@@ -95,25 +96,40 @@ class ProfileController extends Controller
      */
     public function createToken(Request $request): RedirectResponse
     {
-        abort_unless(setting('api_enabled', true), 403, 'The API is turned off.');
+        $user = $request->user();
+        $aiAllowed = module_enabled('ai') && $user->can('ai.mcp');
 
         $data = $request->validate([
             'token_name' => ['required', 'string', 'max:100'],
+            'token_for' => ['nullable', 'in:api'.($aiAllowed ? ',mcp' : '')],
             'token_access' => ['required', 'in:full,read'],
             'token_expires' => ['required', 'in:never,30,90,365'],
         ]);
+        $forAi = ($data['token_for'] ?? 'api') === 'mcp';
 
-        $newToken = $request->user()->createToken(
-            $data['token_name'],
-            $data['token_access'] === 'read' ? ['read'] : ['*'],
-            $data['token_expires'] === 'never' ? null : now()->addDays((int) $data['token_expires']),
-        );
+        if (! $forAi) {
+            abort_unless(setting('api_enabled', true), 403, 'The API is turned off.');
+        }
 
-        activity('auth')->causedBy($request->user())->event('token')->log("Created API token \"{$data['token_name']}\"");
+        // API tokens: ["*"] or ["read"]. AI client tokens: ["mcp","write"] or ["mcp","read"], only valid on /mcp.
+        $abilities = $forAi
+            ? ['mcp', $data['token_access'] === 'read' ? 'read' : 'write']
+            : ($data['token_access'] === 'read' ? ['read'] : ['*']);
+
+        $days = $data['token_expires'] === 'never' ? null : (int) $data['token_expires'];
+        $maxAiDays = (int) setting('ai_token_days', 90);
+        if ($forAi && $maxAiDays > 0) {
+            $days = min($days ?? $maxAiDays, $maxAiDays); // AI tokens always expire (Settings > AI)
+        }
+
+        $newToken = $user->createToken($data['token_name'], $abilities, $days ? now()->addDays($days) : null);
+
+        activity('auth')->causedBy($user)->event('token')
+            ->log(($forAi ? 'Created AI client token' : 'Created API token')." \"{$data['token_name']}\"");
 
         return redirect()->route('admin.profile.edit', ['tab' => 'security'])
             ->with('new_token', $newToken->plainTextToken)
-            ->with('success', 'Token created. Copy it now: it will not be shown again.');
+            ->with('success', 'Token created. Copy it now: it will not be shown again.'.($forAi && $days ? " It expires in {$days} days." : ''));
     }
 
     public function destroyToken(Request $request, int $token): RedirectResponse

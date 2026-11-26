@@ -2155,3 +2155,150 @@ Module `app/Modules/Ai`, full guide in `AI.md`. In short:
 - Provider, model and key: Settings > AI (key encrypted, per tenant) or `.env` / `config/ai.php`. Call `AiSettings::apply()` before using an agent in your own code.
 - Tests: `SiteServer::actingAs($user)->tool(Tool::class, [...])`, `SiteAssistant::fake([...])`.
 
+---
+
+## 32. Passkeys and request-forgery protection
+
+### Passkeys (fingerprint, Face ID, Windows Hello, phone)
+
+Staff and customers can sign in with one tap instead of a password. A passkey is a key pair: the private half never leaves the device and is unlocked with the fingerprint / face / PIN, so there is nothing to phish or leak. It counts as two-factor: with *Settings → Security → Require two-factor* on, a user with a passkey is not forced to set up an authenticator app.
+
+| | Staff (admin panel) | Customers (website) |
+| --- | --- | --- |
+| Sign in | "Sign in with a passkey" on `/admin/login` | same on `/account/login` |
+| Add / remove | Profile → Security → Passkeys | My account → Security → Passkeys |
+| Table | `passkeys` | `customer_passkeys` (model `CustomerPasskey`) |
+| Switch | Settings → Security → *Passkey sign-in for staff* | Settings → Customers → *Passkey sign-in for customers* |
+| Routes | `passkey.login-options`, `passkey.login`, `admin.profile.passkeys.*` | `customer.passkey.*`, `customer.passkeys.*` |
+
+How it fits together:
+
+1. **`app/Core/Security/PasskeyService.php`** wraps laravel/passkeys. `for(kind, request)` picks the tables and binds passkeys to the **current host** (each tenant's own address in SaaS mode). The WebAuthn challenge is kept in the session between the two steps.
+2. **Controllers**: `app/Http/Controllers/Auth/PasskeyController.php` (staff) and `app/Modules/Customers/Controllers/Web/PasskeyController.php`. Sign-in refuses inactive staff and blocked customers. Adding a passkey asks for the account password first.
+3. **Browser**: `resources/shared/passkeys.js`, no npm package. It uses the browser's own `PublicKeyCredential.parseRequestOptionsFromJSON()` and `credential.toJSON()`. Markup hooks: `data-passkey-login`, `data-passkey-register`, `data-passkey-supported` (hidden on old browsers).
+
+Rules worth knowing:
+- Passkeys need **HTTPS**, or `localhost` / `*.localhost` while developing.
+- A passkey works only on the domain it was added on. If you move a site to a new domain, users add their passkey again (the password still works).
+- Passwords stay. Passkeys are an extra, faster way in, never the only one.
+
+### PreventRequestForgery (Laravel 13)
+
+`bootstrap/app.php`:
+
+```php
+$middleware->preventRequestForgery(except: ['billing/webhooks/*'], originOnly: false, allowSameSite: false);
+```
+
+- Modern browsers send `Sec-Fetch-Site`. A POST/PUT/DELETE is accepted when it says `same-origin`.
+- No header (old browser, curl): the CSRF token is checked as before, so keep `@csrf` in forms.
+- `allowSameSite: false`: `acme.example.com` can't post to `laravelnews.example.com`, even though they share a parent domain.
+- Payment webhooks are excluded because Razorpay / Stripe sign them.
+- To exclude another path (an incoming webhook from a service), add it to `except` and verify that service's signature in the controller.
+
+### Test it by hand
+
+**A fingerprint on any PC:** use Windows Hello (Chrome / Edge pick it up on localhost), or Chrome's virtual authenticator: F12 → ⋮ → More tools → **WebAuthn** → *Enable virtual authenticator environment* → Add (`ctap2`, `internal`, resident keys ✓, user verification ✓). Keep DevTools open.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Profile → Security → Passkeys, wrong password → Add passkey | "The password is incorrect" |
+| 2 | Right password, name `My laptop`, approve | "Passkey added", listed with "Last used never" |
+| 3 | Sign out → `/admin/login` → Sign in with a passkey | Dashboard without typing; Activity log "Signed in with a passkey"; Sign-in history row |
+| 4 | Click the button, then Cancel the prompt | No error, button works again |
+| 5 | Settings → Security → Require two-factor on; a user with a passkey but no 2FA app signs in | Not forced to 2FA setup |
+| 6 | Suspend that user, passkey sign-in | "This account cannot sign in" |
+| 7 | Settings → Security → Passkey sign-in for staff off | Button and Passkeys card gone |
+| 8 | Remove the passkey, try it | Refused; password still works |
+| 9 | Customer: `/account/login` → My account → Security → Add passkey → sign out → passkey sign-in | Lands on My account |
+| 10 | Customer passkey on `/admin/login` | Not accepted (separate tables) |
+| 11 | Admin → Customers → block that customer, passkey sign-in | Refused |
+| 12 | SaaS: passkey added on `laravelnews.localhost`, open `acme.localhost/admin` | Browser doesn't offer it (passkeys are per address) |
+
+**Button not showing?** Use `localhost`, not `127.0.0.1` (passkeys need localhost, `*.localhost` or HTTPS); `npm run build` + Ctrl+F5; the page must have `<meta name="csrf-token">`; browser Chrome/Edge 129+ or Safari 18+ (F12 console: `PublicKeyCredential.parseRequestOptionsFromJSON` must exist).
+
+**Request forgery by hand:**
+```bash
+curl -i -X POST http://localhost:8090/admin/login -d "email=a@b.c&password=x"                                   # 419
+curl -i -X POST http://localhost:8090/admin/login -H "Sec-Fetch-Site: cross-site" -d "email=a@b.c&password=x"   # 419
+```
+
+Automated tests: `tests/Feature/PasskeyTest.php`, `tests/Feature/RequestForgeryTest.php`.
+
+---
+
+## 33. Team chat (staff, realtime)
+
+One-to-one chat between staff users inside the admin panel: text, emoji, photos (also paste a screenshot), documents and voice notes, with typing indicator, read ticks and an unread badge in the top bar. Module `app/Modules/Chat`, menu **Main → Team chat**.
+
+### Who can chat
+
+| Permission | Lets the user |
+|---|---|
+| `chat.view` | Use chat: see their conversations, reply, send photos / files / voice notes. Others can find them. |
+| `chat.start` | Also search all staff (name or email) and **start** a new conversation with anyone |
+
+- Super admin and Admin have both. New installs give Editor `chat.view` (reply only).
+- To let one editor start chats: Users → key icon → tick `chat.start` (or tick it on the role for all editors).
+- Only **active** users with `chat.view` appear in search; you can't message someone who couldn't read it.
+- Someone without `chat.start` can still reopen an existing conversation with the same person.
+
+### Settings → Team chat
+
+Allow images · Allow voice notes · Allow documents · Largest file (MB, default 10) · Delete messages after (days, 0 = keep forever; pruned nightly with `model:prune`).
+
+### Files: private, local or S3
+
+Chat files go on their own **private** disk `chat` (`config/filesystems.php`), never on the public `/storage` folder:
+
+```dotenv
+CHAT_DISK=           # empty: s3 when UPLOADS_DISK=s3, otherwise local
+CHAT_DISK=local      # storage/app/private/chat/…
+CHAT_DISK=s3         # your bucket (AWS_* keys) under AWS_CHAT_PREFIX=chat
+```
+
+Paths: `central/2026/11/<random>.png` or, in SaaS mode, `tenantacme/2026/11/…`. Files are served by `GET /admin/chat/attachments/{message}` only to the two people in the conversation. Photos and voice notes open inline; documents always download (nothing else is rendered on your domain). Allowed types: `ChatSettings::IMAGE`, `AUDIO`, `FILE`. Moving from local to S3 later: `aws s3 sync storage/app/private/chat s3://BUCKET/chat`, then set `CHAT_DISK=s3`.
+
+### Realtime
+
+- With Reverb (`BROADCAST_CONNECTION=reverb`): events `chat.message`, `chat.read`, `chat.typing`, `chat.deleted` go to each person's private user channel (the same one as bell notifications, tenant-safe). They are sent immediately, not queued. If Reverb is down, the message is still saved.
+- Without Reverb (`log`): the chat page polls every 4 s, so it still works, just not instantly.
+- Other admin pages: the top-bar chat icon counts up and a toast shows "Name: message" with a soft sound.
+
+### Voice notes
+
+The mic button uses the browser's MediaRecorder (Chrome/Edge/Firefox: webm, Safari: m4a), max 5 minutes. Needs **HTTPS or localhost**, and the browser asks for microphone permission once. The `Permissions-Policy` header allows `microphone=(self)` and CSP allows `media-src 'self' blob:`.
+
+### Code
+
+| What | Where |
+|---|---|
+| Routes (`admin.chat.*`) | `app/Modules/Chat/Routes/admin.php` |
+| Controller | `Controllers/Admin/ChatController.php` |
+| Models | `Conversation` (direct now, participants table ready for groups), `Participant` (last read), `Message` (soft delete = "This message was deleted") |
+| Realtime event | `Events/ChatEvent.php` |
+| Files / settings | `Support/ChatFiles.php`, `Support/ChatSettings.php` |
+| Page + JS + CSS | `Views/admin/index.blade.php`, `Resources/js/admin/chat.js`, `chat.css` |
+
+### Test it by hand
+
+Two browsers (or Chrome + an incognito window), two users: Super admin and an Editor.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Super admin → Team chat, type the editor's name | "Start a chat with" lists them (role + email) |
+| 2 | Click them, type `Hi 👋` + Enter | Message on the right with ✓ |
+| 3 | Editor (other browser), any admin page | Top-bar chat icon shows **1**, toast "Bala: Hi 👋" (with Reverb) |
+| 4 | Editor opens the chat | Message there; the sender's ✓ turns into blue ✓✓ |
+| 5 | Editor types | Sender sees "typing…" under the name (with Reverb) |
+| 6 | Emoji button, 📎 a photo, a PDF, paste a screenshot (Ctrl+V) | Photo inline, PDF as a download card |
+| 7 | Mic → speak → Send | Voice note with a player on both sides |
+| 8 | Hover your own message → trash | "This message was deleted" for both; the file is removed |
+| 9 | Editor searches a name | Not possible ("Search chats…" only filters their chats) |
+| 10 | Users → key icon on the editor → tick `chat.start` | Editor can now start chats |
+| 11 | Settings → Team chat → Allow images off, send a photo | "This kind of file can't be sent in chat." |
+| 12 | Copy a photo's address, open it in a browser signed in as a third user | 404 |
+| 13 | `BROADCAST_CONNECTION=log`, `art optimize:clear` | Chat still works, new messages appear within ~4 s |
+
+Automated tests: `tests/Feature/ChatTest.php` (11) and `SaasTest::test_team_chat_inside_a_tenant`.
+

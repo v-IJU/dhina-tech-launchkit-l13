@@ -26,7 +26,8 @@ class SecurityHeaders
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+        // microphone=(self): Team chat voice notes, only our own pages may ask (the browser still asks the user).
+        $response->headers->set('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=()');
 
         if (app()->isProduction() && $request->isSecure()) {
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
@@ -62,6 +63,7 @@ class SecurityHeaders
             "style-src 'self' 'unsafe-inline'".$dev,
             "img-src 'self' ".implode(' ', config('starter.csp.img_src')),
             "font-src 'self' data:".$dev,
+            "media-src 'self' blob:",
             "connect-src 'self'".$reverb.$dev.$devWs,
             'frame-src '.implode(' ', config('starter.csp.frame_src')),
             "frame-ancestors 'self'",

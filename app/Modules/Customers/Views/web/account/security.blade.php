@@ -9,6 +9,37 @@
 @endphp
 
 @section('account')
+    @if (setting('customer_passkeys', true))
+        @component('customers::web.account._card', ['title' => __('Passkeys'), 'text' => __('Sign in with your fingerprint, face or phone instead of a password. Safer and faster.')])
+            <ul class="divide-y divide-slate-100">
+                @forelse ($passkeys as $passkey)
+                    <li class="flex items-center gap-3 py-3">
+                        <svg class="h-6 w-6 flex-none text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" d="M12 11v2m-4-3a4 4 0 0 1 8 0v3a8 8 0 0 1-1 4M8 13c0 2.5-.6 4.6-1.6 6.2M12 21c1.5-2.3 2-4.8 2-8M5 9a7 7 0 0 1 14 0v4c0 1-.1 2-.3 3"/></svg>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-semibold text-slate-800">{{ $passkey->name }} @if ($passkey->authenticator)<span class="ml-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ $passkey->authenticator }}</span>@endif</div>
+                            <div class="text-sm text-slate-500">{{ __('Added :date', ['date' => $passkey->created_at?->format('d M Y')]) }} · {{ __('Last used :when', ['when' => $passkey->last_used_at?->diffForHumans() ?? __('never')]) }}</div>
+                        </div>
+                        <form method="POST" action="{{ route('customer.passkeys.destroy', $passkey->id) }}" onsubmit="return confirm('{{ __('Remove this passkey?') }}')">
+                            @csrf @method('DELETE')
+                            <button class="text-sm font-semibold text-red-700 hover:underline">{{ __('Remove') }}</button>
+                        </form>
+                    </li>
+                @empty
+                    <li class="py-3 text-sm text-slate-500">{{ __('No passkeys yet.') }}</li>
+                @endforelse
+            </ul>
+            <div data-passkey-supported hidden class="mt-4">
+                <form data-passkey-register data-options-url="{{ route('customer.passkeys.options') }}" data-store-url="{{ route('customer.passkeys.store') }}" class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    @include('customers::web._field', ['name' => 'name', 'id' => 'pk_name', 'label' => __('Name'), 'placeholder' => __('e.g. My phone'), 'class' => 'sm:w-56'])
+                    @include('customers::web._field', ['name' => 'password', 'id' => 'pk_password', 'label' => __('Your password'), 'type' => 'password', 'required' => true, 'autocomplete' => 'current-password', 'class' => 'sm:w-56'])
+                    <button type="submit" class="btn-brand">{{ __('Add passkey') }}</button>
+                </form>
+                <p class="mt-2 text-sm text-red-600" data-passkey-error hidden role="alert"></p>
+            </div>
+            <p class="mt-3 text-sm text-slate-500" data-passkey-unsupported>{{ __('This browser can\'t create passkeys. Try a recent Chrome, Safari, Edge or Firefox.') }}</p>
+        @endcomponent
+    @endif
+
     @component('customers::web.account._card', ['title' => __('Two-factor login'), 'text' => __('Ask for a 6-digit code from an app such as Google Authenticator every time you sign in.')])
         @slot('action')
             <span @class(['rounded-full px-3 py-1 text-xs font-semibold', 'bg-emerald-50 text-emerald-700' => $customer->two_factor_confirmed_at, 'bg-slate-100 text-slate-600' => ! $customer->two_factor_confirmed_at])>

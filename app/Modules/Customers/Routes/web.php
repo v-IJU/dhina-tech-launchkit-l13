@@ -3,6 +3,7 @@
 use App\Modules\Customers\Controllers\Web\AccountController;
 use App\Modules\Customers\Controllers\Web\AddressController;
 use App\Modules\Customers\Controllers\Web\AuthController;
+use App\Modules\Customers\Controllers\Web\PasskeyController;
 use App\Modules\Customers\Controllers\Web\PasswordController;
 use App\Modules\Customers\Controllers\Web\SecurityController;
 use App\Modules\Customers\Controllers\Web\VerificationController;
@@ -22,6 +23,8 @@ Route::middleware('customer.enabled')->prefix('account')->name('customer.')->gro
         Route::post('forgot-password', [PasswordController::class, 'sendLink'])->middleware('throttle:customer-mail')->name('password.email');
         Route::get('reset-password/{token}', [PasswordController::class, 'showReset'])->name('password.reset');
         Route::post('reset-password', [PasswordController::class, 'reset'])->name('password.update');
+        Route::get('passkeys/login/options', [PasskeyController::class, 'loginOptions'])->middleware('throttle:customer-login')->name('passkey.login-options');
+        Route::post('passkeys/login', [PasskeyController::class, 'login'])->middleware('throttle:customer-login')->name('passkey.login');
     });
 
     // Link in the "Confirm your email" email. Signed, so it works whether or not the customer is signed in.
@@ -52,6 +55,9 @@ Route::middleware('customer.enabled')->prefix('account')->name('customer.')->gro
             Route::post('security/two-factor/{action}', [SecurityController::class, 'twoFactor'])
                 ->whereIn('action', ['enable', 'confirm', 'disable', 'recovery-codes'])->name('two-factor.manage');
             Route::delete('security/apps', [SecurityController::class, 'signOutApps'])->name('apps.destroy');
+            Route::post('security/passkeys/options', [PasskeyController::class, 'registrationOptions'])->middleware('throttle:20,1')->name('passkeys.options');
+            Route::post('security/passkeys', [PasskeyController::class, 'store'])->middleware('throttle:20,1')->name('passkeys.store');
+            Route::delete('security/passkeys/{passkeyId}', [PasskeyController::class, 'destroy'])->whereNumber('passkeyId')->name('passkeys.destroy');
         });
     });
 });

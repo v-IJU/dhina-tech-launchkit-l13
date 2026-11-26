@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Ai\Mcp\Tools;
 
 use App\Models\User;
+use App\Modules\Ai\Support\AiUsage;
+use Illuminate\Support\Str;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
+use Throwable;
 
 /**
  * Base for every tool AI clients can call. One class serves both:
@@ -63,14 +66,88 @@ abstract class SiteTool extends Tool
     public function handle(Request $request): Response|ResponseFactory
     {
         $user = $request->user();
-        if (! $user instanceof User || ! $this->allows($user)) {
+        $user = $user instanceof User ? $user : null;
+        $usage = app(AiUsage::class);
+        $log = function (string $status, ?string $message = null, int $ms = 0) use ($usage, $user): void {
+            $usage->record('mcp', $user, [
+                'tools' => [$this->name()], 'status' => $status, 'message' => $message, 'duration_ms' => $ms,
+                'provider' => Str::limit((string) request()->userAgent(), 40, ''), // which AI client
+            ]);
+            $usage->checkAlerts($user, $status, $this->name());
+        };
+
+        if ($user === null || ! $this->allows($user)) {
+            $log('denied', 'No permission');
+
             return Response::error('You do not have permission to use this tool.');
         }
         if ($this->writes && ! $this->tokenCanWrite($user)) {
+            $log('denied', 'Read-only token');
+
             return Response::error('This token is read-only. Create a token with full access to make changes.');
         }
 
-        return Response::structured($this->run($request->all(), $user));
+        $started = hrtime(true);
+        try {
+            $result = $this->run($request->all(), $user);
+        } catch (Throwable $e) {
+            $log('error', $e->getMessage(), (int) ((hrtime(true) - $started) / 1_000_000));
+            throw $e;
+        }
+        $log('ok', null, (int) ((hrtime(true) - $started) / 1_000_000));
+
+        return Response::structured($result);
+    }
+
+    /*
+    | Personal data. With Settings > AI > "Hide personal data" on, tools send masked values
+    | to the AI: r***@gmail.com, ******3210, "Ravi K." Use these for anything personal you return.
+    */
+    protected function masking(): bool
+    {
+        return (bool) setting('ai_mask_personal_data', false);
+    }
+
+    protected function email(?string $email): ?string
+    {
+        if ($email === null || ! $this->masking() || ! str_contains($email, '@')) {
+            return $email;
+        }
+        [$local, $domain] = explode('@', $email, 2);
+
+        return mb_substr($local, 0, 1).'***@'.$domain;
+    }
+
+    protected function phone(?string $phone): ?string
+    {
+        if ($phone === null || ! $this->masking()) {
+            return $phone;
+        }
+        $digits = preg_replace('/\D/', '', $phone) ?? '';
+
+        return $digits === '' ? null : str_repeat('*', max(0, strlen($digits) - 4)).substr($digits, -4);
+    }
+
+    protected function person(?string $name): ?string
+    {
+        if ($name === null || ! $this->masking()) {
+            return $name;
+        }
+        $parts = preg_split('/\s+/', trim($name)) ?: [];
+        $first = array_shift($parts) ?? '';
+
+        return trim($first.' '.implode(' ', array_map(fn ($p) => mb_substr($p, 0, 1).'.', $parts)));
+    }
+
+    /** Free text (messages): hides email addresses and phone numbers inside it. */
+    protected function text(?string $text): ?string
+    {
+        if ($text === null || ! $this->masking()) {
+            return $text;
+        }
+        $text = preg_replace_callback('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', fn ($m) => (string) $this->email($m[0]), $text) ?? $text;
+
+        return preg_replace_callback('/\+?\d[\d\s().-]{7,}\d/', fn ($m) => (string) $this->phone($m[0]), $text) ?? $text;
     }
 
     private function tokenCanWrite(User $user): bool

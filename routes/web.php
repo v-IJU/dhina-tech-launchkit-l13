@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\Tenancy\Tenancy;
+use App\Http\Controllers\Auth\PasskeyController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Features\UserImpersonation;
 
@@ -18,3 +19,18 @@ Route::get('impersonate/{token}', function (string $token) {
 
     return UserImpersonation::makeResponse($token);
 })->where('token', '[A-Za-z0-9]+')->name('saas.impersonate');
+
+// Admin users: passkey sign-in (fingerprint, Face ID…) and My profile > Security > Passkeys.
+// Customers have their own passkey routes in the Customers module (/account/passkeys/...).
+Route::prefix((string) config('starter.admin_path'))->group(function () {
+    Route::middleware(['guest:web', 'throttle:10,1'])->group(function () {
+        Route::get('passkeys/login/options', [PasskeyController::class, 'loginOptions'])->name('passkey.login-options');
+        Route::post('passkeys/login', [PasskeyController::class, 'login'])->name('passkey.login');
+    });
+
+    Route::middleware(['auth:web', 'active', 'throttle:20,1'])->group(function () {
+        Route::post('profile/passkeys/options', [PasskeyController::class, 'registrationOptions'])->name('admin.profile.passkeys.options');
+        Route::post('profile/passkeys', [PasskeyController::class, 'store'])->name('admin.profile.passkeys.store');
+        Route::delete('profile/passkeys/{passkeyId}', [PasskeyController::class, 'destroy'])->whereNumber('passkeyId')->name('admin.profile.passkeys.destroy');
+    });
+});

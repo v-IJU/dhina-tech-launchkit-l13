@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passkeys\Passkeys;
 use Opcodes\LogViewer\Facades\LogViewer;
 use RuntimeException;
 use Stancl\Tenancy\Events\RevertedToCentralContext;
@@ -36,6 +37,10 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Passkey routes are our own (admin users and customers): app/Http/Controllers/Auth/PasskeyController
+        // and the Customers module. The package's single-guard routes are not used.
+        Passkeys::ignoreRoutes();
+
         $this->app->singleton(SettingsRepository::class);
         $this->app->singleton(MenuService::class);
     }

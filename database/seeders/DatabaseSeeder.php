@@ -42,7 +42,7 @@ class DatabaseSeeder extends Seeder
             ], $p)],
             'editor' => ['Editor', 'Writes and publishes blog posts and keeps website content up to date.', '#16a34a', fn (string $p) => Str::is([
                 'dashboard.view', 'blog.*', 'categories.*', 'media.view', 'media.create', 'media.edit',
-                'pages.view', 'pages.edit', 'sliders.*', 'services.*', 'testimonials.*', 'faqs.*', 'inbox.view',
+                'pages.view', 'pages.edit', 'sliders.*', 'services.*', 'testimonials.*', 'faqs.*', 'inbox.view', 'chat.view',
             ], $p) && ! Str::is(['*.delete'], $p)],
         ];
 

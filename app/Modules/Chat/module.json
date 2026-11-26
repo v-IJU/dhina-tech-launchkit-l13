@@ -1,0 +1,17 @@
+{
+    "name": "Team chat",
+    "slug": "chat",
+    "description": "Realtime one-to-one chat between staff users: text, emoji, images, files and voice notes. Files stay private (local disk or S3).",
+    "version": "1.0.0",
+    "enabled": true,
+    "core": false,
+    "order": 5,
+    "central": true,
+    "tenant": true,
+    "permissions": [
+        { "key": "chat", "label": "Team chat", "actions": ["view", "start"] }
+    ],
+    "menu": [
+        { "key": "chat", "group": "Main", "label": "Team chat", "icon": "bi-chat-dots", "route": "admin.chat.index", "permission": "chat.view", "order": 2 }
+    ]
+}

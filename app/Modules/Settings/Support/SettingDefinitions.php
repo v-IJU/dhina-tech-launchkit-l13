@@ -94,7 +94,8 @@ class SettingDefinitions
             'security' => [
                 'label' => 'Security', 'icon' => 'bi-shield-lock', 'description' => 'Sign-in rules for everyone who uses the admin panel.',
                 'fields' => [
-                    'enforce_2fa' => ['type' => 'toggle', 'label' => 'Require 2FA for Super Admin and Admin roles', 'rules' => ['boolean'], 'span' => true, 'hint' => 'They must set up an authenticator app before using the panel.'],
+                    'enforce_2fa' => ['type' => 'toggle', 'label' => 'Require 2FA for Super Admin and Admin roles', 'rules' => ['boolean'], 'span' => true, 'hint' => 'They must set up an authenticator app or a passkey before using the panel.'],
+                    'passkeys_enabled' => ['type' => 'toggle', 'label' => 'Passkey sign-in for staff', 'rules' => ['boolean'], 'default' => true, 'span' => true, 'hint' => 'Fingerprint, Face ID, Windows Hello or phone instead of a password. Staff add passkeys under My profile > Security.'],
                     'session_lifetime' => ['type' => 'number', 'label' => 'Session timeout (minutes)', 'rules' => ['nullable', 'integer', 'between:5,10080'], 'default' => 120],
                     'password_min_length' => ['type' => 'number', 'label' => 'Minimum password length', 'rules' => ['nullable', 'integer', 'between:8,64'], 'default' => 8],
                     'login_attempts' => ['type' => 'number', 'label' => 'Sign-in attempts per minute', 'rules' => ['nullable', 'integer', 'between:3,20'], 'default' => 5],
@@ -113,6 +114,7 @@ class SettingDefinitions
                     'customer_registration' => ['type' => 'toggle', 'label' => 'Allow customers to sign up', 'rules' => ['boolean'], 'default' => true, 'hint' => 'Off = only staff can add customers (Customers > Add customer).'],
                     'customer_verify_email' => ['type' => 'toggle', 'label' => 'Customers must confirm their email', 'rules' => ['boolean'], 'default' => true, 'hint' => 'Until they click the emailed link they can only see the "check your inbox" page.'],
                     'customer_2fa' => ['type' => 'toggle', 'label' => 'Let customers turn on two-factor login', 'rules' => ['boolean'], 'default' => true, 'hint' => 'Optional for each customer, under My account > Security.'],
+                    'customer_passkeys' => ['type' => 'toggle', 'label' => 'Passkey sign-in for customers', 'rules' => ['boolean'], 'default' => true, 'hint' => 'Customers sign in with fingerprint or Face ID. They add passkeys under My account > Security.'],
                     'customer_welcome_email' => ['type' => 'toggle', 'label' => 'Send a welcome email after sign up', 'rules' => ['boolean'], 'default' => true],
                     'customer_notify_new_device' => ['type' => 'toggle', 'label' => 'Email customers about sign-ins from a new device', 'rules' => ['boolean'], 'default' => true],
                     'customer_notify_admins' => ['type' => 'toggle', 'label' => 'Notify staff about new sign ups', 'rules' => ['boolean'], 'default' => false, 'hint' => 'Bell notification for everyone who can view customers.'],
@@ -143,7 +145,23 @@ class SettingDefinitions
                     'ai_mcp_enabled' => ['type' => 'toggle', 'label' => 'Allow AI clients (MCP)', 'rules' => ['boolean'], 'default' => false, 'span' => true, 'hint' => 'Lets Claude, ChatGPT, Cursor… connect at /mcp with a user\'s API token. They can only do what that user may do.'],
                     'ai_provider' => ['type' => 'select', 'label' => 'Assistant AI provider', 'rules' => ['nullable', 'in:'.implode(',', array_keys(AiSettings::PROVIDERS))], 'options' => ['' => 'Off'] + AiSettings::PROVIDERS, 'default' => ''],
                     'ai_model' => ['type' => 'text', 'label' => 'Model', 'rules' => ['nullable', 'string', 'max:100'], 'default' => '', 'hint' => 'Empty = the provider\'s default model (config/ai.php).'],
+                    'ai_token_days' => ['type' => 'number', 'label' => 'AI client tokens expire after (days)', 'rules' => ['nullable', 'integer', 'min:0', 'max:3650'], 'default' => 90, 'hint' => 'Longest life of a token made "For: AI client". 0 = no maximum.'],
+                    'ai_mask_personal_data' => ['type' => 'toggle', 'label' => 'Hide personal data from AI', 'rules' => ['boolean'], 'default' => false, 'hint' => 'Tools send r***@gmail.com, ******3210, "Ravi K." instead of real emails, phones and surnames, also inside messages.'],
+                    'ai_alerts' => ['type' => 'toggle', 'label' => 'Security alerts', 'rules' => ['boolean'], 'default' => true, 'hint' => 'Email + bell to admins when an AI client is refused or makes unusually many calls.'],
+                    'ai_alert_hourly_calls' => ['type' => 'number', 'label' => 'Alert above this many AI tool calls per hour (per user)', 'rules' => ['nullable', 'integer', 'min:0'], 'default' => 200, 'hint' => '0 = no volume alert.'],
+                    'ai_monthly_token_limit' => ['type' => 'number', 'label' => 'Monthly token limit (assistant)', 'rules' => ['nullable', 'integer', 'min:0'], 'default' => '', 'hint' => 'Empty = no limit. Stops the assistant until the 1st of next month. Usage: Admin > AI & MCP.'],
                     'ai_api_key' => ['type' => 'password', 'label' => 'API key', 'rules' => ['nullable', 'string', 'max:500'], 'hint' => 'Stored encrypted. Empty = use the key from .env (OPENAI_API_KEY, ANTHROPIC_API_KEY…).'],
+                ],
+            ],
+            'chat' => [
+                'module' => 'chat',
+                'label' => 'Team chat', 'icon' => 'bi-chat-dots', 'description' => 'Staff chat (Main > Team chat). Who may chat: permission chat.view; who may start new chats: chat.start (Roles, or Users > key icon). Files are private, on CHAT_DISK (local or s3).',
+                'fields' => [
+                    'chat_images' => ['type' => 'toggle', 'label' => 'Allow images', 'rules' => ['boolean'], 'default' => true, 'hint' => 'jpg, png, gif, webp'],
+                    'chat_voice_notes' => ['type' => 'toggle', 'label' => 'Allow voice notes', 'rules' => ['boolean'], 'default' => true, 'hint' => 'Record with the microphone button (needs HTTPS or localhost).'],
+                    'chat_files' => ['type' => 'toggle', 'label' => 'Allow documents', 'rules' => ['boolean'], 'default' => true, 'hint' => 'pdf, Word, Excel, PowerPoint, csv, txt, zip. Always downloaded, never opened in the browser.'],
+                    'chat_max_upload_mb' => ['type' => 'number', 'label' => 'Largest file (MB)', 'rules' => ['nullable', 'integer', 'min:1', 'max:100'], 'default' => 10, 'hint' => 'Also check upload_max_filesize / post_max_size in PHP and client_max_body_size in Nginx.'],
+                    'chat_retention_days' => ['type' => 'number', 'label' => 'Delete messages after (days)', 'rules' => ['nullable', 'integer', 'min:0', 'max:3650'], 'default' => 0, 'hint' => '0 = keep forever. Older messages and their files are removed every night.'],
                 ],
             ],
             'billing' => [

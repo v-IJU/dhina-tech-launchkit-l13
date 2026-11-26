@@ -232,7 +232,11 @@ Webhook URLs: `https://yourapp.com/billing/webhooks/razorpay` and `/billing/webh
 
 ## 8b. AI & MCP per tenant
 
-**AI & MCP** is a plan module (Enterprise by default). A tenant with it turns it on under its own Settings → AI, uses its own AI key (or falls back to yours in `.env`), and connects AI clients to `https://acme.yourapp.com/mcp` with tokens from its own panel. Details: `AI.md`.
+**AI & MCP** is a plan module (Enterprise by default). A tenant with it turns it on under its own Settings → AI, uses its own AI key (or falls back to yours in `.env`), and connects AI clients to `https://acme.yourapp.com/mcp` with tokens from its own panel. Plans have a limit **AI tokens / month** (Enterprise 1,000,000) for tenants using your key; their usage shows on the tenant page. Details: `AI.md` section 4, test list section 9.
+
+**Team chat per tenant:** a plan module (Business and Enterprise by default). Each tenant's staff chat only with their own colleagues; files are stored under `tenant{id}/` on the private chat disk.
+
+**Passkeys per tenant:** staff and customers of each tenant add passkeys on that tenant's address (`acme.yourapp.com`); they don't work on other tenants or the console. Run `art tenants:migrate` after updating so every tenant gets the passkey tables.
 
 ## 9. Scheduled jobs
 
@@ -280,6 +284,8 @@ Backups: the built-in backup covers the central database; use RDS automated snap
 | Tenant can't reach a page, gets sent to Billing | It is suspended: Record a payment / Reactivate in the console |
 | Changed `.env` not picked up | `art optimize:clear`, `dc restart app horizon scheduler reverb` |
 | Error in one tenant | Console → System → Monitoring → Error log (shows the tenant id) |
+| Passkey not offered on another tenant | Expected: passkeys belong to the address they were added on. Add one per tenant |
+| Claude Code calls not in a tenant's AI & MCP | URL and token must be from the same tenant (`acme.localhost:8080/mcp` + acme token). `AI.md` §2 |
 
 ## 12. One page
 

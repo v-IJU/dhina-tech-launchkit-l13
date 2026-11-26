@@ -42,8 +42,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Behind nginx / a load balancer inside Docker or on AWS.
         $middleware->trustProxies(at: '*');
 
-        // Payment webhooks (SaaS mode) are verified by signature instead of a CSRF token.
-        $middleware->validateCsrfTokens(except: ['billing/webhooks/*']);
+        // Laravel 13 request-forgery protection (on for every web route):
+        //  - modern browsers: the Sec-Fetch-Site header must say the form/fetch came from this same site
+        //  - older browsers / no header: falls back to the CSRF token as before
+        // allowSameSite false = a sibling subdomain (another tenant, e.g. acme.example.com) can't post to
+        // laravelnews.example.com. Payment webhooks are verified by signature instead, so they are excluded.
+        $middleware->preventRequestForgery(except: ['billing/webhooks/*'], originOnly: false, allowSameSite: false);
 
         // SaaS mode: pick the tenant from the host before sessions start (no-op in single-business mode).
         $middleware->web(prepend: [IdentifyTenant::class], append: [SecurityHeaders::class]);

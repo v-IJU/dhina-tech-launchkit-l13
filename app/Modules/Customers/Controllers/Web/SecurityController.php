@@ -33,6 +33,7 @@ class SecurityController extends Controller
             'customer' => $customer,
             'logins' => $customer->loginEvents()->limit(10)->get(),
             'apps' => $customer->tokens()->latest()->get(),
+            'passkeys' => $customer->passkeys()->latest()->get(),
         ]);
     }
 

@@ -132,6 +132,13 @@
                     <i class="bi bi-moon" data-theme-icon></i>
                 </button>
 
+                @isset($chatUnread)
+                    <a href="{{ route('admin.chat.index') }}" class="btn btn-icon btn-link text-body position-relative" aria-label="Team chat" title="Team chat">
+                        <i class="bi bi-chat-dots fs-5"></i>
+                        <span class="notif-dot {{ $chatUnread ? '' : 'd-none' }}" data-chat-unread="{{ $chatUnread }}">{{ $chatUnread > 99 ? '99+' : $chatUnread }}</span>
+                    </a>
+                @endisset
+
                 <div class="dropdown">
                     <button class="btn btn-icon btn-link text-body position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
                         <i class="bi bi-bell fs-5"></i>

@@ -29,4 +29,15 @@
 
         <button class="btn btn-primary btn-lg fs-6">Sign in</button>
     </form>
+
+    @if (setting('passkeys_enabled', true))
+        <div data-passkey-supported data-passkey-root hidden class="mt-3">
+            <div class="d-flex align-items-center gap-2 my-3 text-secondary small"><hr class="flex-fill m-0"> or <hr class="flex-fill m-0"></div>
+            <button type="button" class="btn btn-outline-secondary btn-lg fs-6 w-100" data-passkey-login
+                    data-options-url="{{ route('passkey.login-options') }}" data-login-url="{{ route('passkey.login') }}" data-remember="#remember">
+                <i class="bi bi-fingerprint me-1"></i> Sign in with a passkey
+            </button>
+            <div class="text-danger small mt-2" data-passkey-error hidden role="alert"></div>
+        </div>
+    @endif
 @endsection

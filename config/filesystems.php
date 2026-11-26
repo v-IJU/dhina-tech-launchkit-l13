@@ -88,6 +88,32 @@ return [
             'report' => false,
         ],
 
+        /*
+        | Team chat images, files and voice notes. ALWAYS private: the app checks the user is in the
+        | conversation before sending a file. CHAT_DISK=local → storage/app/private/chat,
+        | CHAT_DISK=s3 → your bucket under AWS_CHAT_PREFIX. Not set: s3 when UPLOADS_DISK=s3, else local.
+        */
+        'chat' => (env('CHAT_DISK') ?: (env('UPLOADS_DISK', 'public') === 's3' ? 's3' : 'local')) === 's3' ? [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_BUCKET'),
+            'url' => env('AWS_URL'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'root' => env('AWS_CHAT_PREFIX', 'chat'),
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ] : [
+            'driver' => 'local',
+            'root' => storage_path('app/private/chat'),
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

@@ -3,6 +3,8 @@
 use App\Core\Tenancy\Tenancy;
 use App\Models\ErrorLog;
 use App\Models\LoginEvent;
+use App\Modules\Ai\Models\AiUsageLog;
+use App\Modules\Chat\Models\Message as ChatMessage;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
@@ -65,7 +67,7 @@ Schedule::command('backup:monitor')->dailyAt('09:00')->onOneServer();
 $perTenant('activitylog:clean')->dailyAt('03:00')->onOneServer();
 $perTenant('sitemap:generate')->dailyAt('03:15')->onOneServer();
 $perTenant('trash:empty')->dailyAt('03:30')->onOneServer();
-$perTenant('model:prune', ['--model' => [LoginEvent::class]])->dailyAt('03:45')->onOneServer();
+$perTenant('model:prune', ['--model' => [LoginEvent::class, AiUsageLog::class, ChatMessage::class]])->dailyAt('03:45')->onOneServer();
 Schedule::command('model:prune', ['--model' => [ErrorLog::class]])->dailyAt('03:50')->onOneServer();
 $perTenant('sanctum:prune-expired', ['--hours' => 24])->dailyAt('04:00')->onOneServer(); // expired app/API tokens
 Schedule::command('queue:prune-failed --hours=168')->daily()->onOneServer();

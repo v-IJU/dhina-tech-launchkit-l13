@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -33,6 +34,12 @@ class ApiAccess
 
         if ($user->status !== 'active') {
             return response()->json(['message' => 'This account is not active.'], 403);
+        }
+
+        // Tokens made for AI clients (MCP) only work on /mcp, never on the REST API.
+        $token = $user->currentAccessToken();
+        if ($token instanceof PersonalAccessToken && in_array('mcp', (array) $token->abilities, true)) {
+            return response()->json(['message' => 'This token is for AI clients (MCP) only. Create an API token on My profile.'], 403);
         }
 
         if (! $request->isMethodSafe() && ! $user->tokenCan('write')) {

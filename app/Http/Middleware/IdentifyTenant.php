@@ -81,7 +81,7 @@ class IdentifyTenant
         $admin = trim((string) config('starter.admin_path'), '/');
 
         return $request->is(
-            $admin.'/login', $admin.'/logout', $admin.'/two-factor-challenge', $admin.'/forgot-password', $admin.'/reset-password*',
+            $admin.'/login', $admin.'/passkeys/login*', $admin.'/logout', $admin.'/two-factor-challenge', $admin.'/forgot-password', $admin.'/reset-password*',
             $admin.'/billing', $admin.'/billing/*', $admin.'/user/confirm-password', 'impersonate/*', 'up',
         );
     }

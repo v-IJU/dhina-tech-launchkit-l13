@@ -211,6 +211,14 @@ Full guide: `DEPLOY.md` (HTTPS, RDS, S3 backups, Auto Scaling).
 | Job / email change ignored | `dc restart horizon` |
 | Errors | Admin → System → Monitoring → Error log, or Log files |
 | Port in use | Change `APP_PORT`, `REVERB_PORT`, `FORWARD_DB_PORT`, `FORWARD_PMA_PORT` in `.env`, `dc up -d` |
+| Passkey button missing | Use `localhost` (not `127.0.0.1`) or HTTPS, `npm run build`, Ctrl+F5. Settings → Security / Customers switches. Test steps: `README_DEVELOPER.md` §32 |
+| Claude Code answers but no MCP row in AI & MCP | Added with local scope or Claude used tinker: `claude mcp add -s user ...`, ask it to use the tool. `AI.md` §2 |
+
+## 11b. Security features to try
+
+- **Passkeys:** Profile → Security → Passkeys (staff) and My account → Security (customers). Fingerprint / Face ID sign-in, counts as 2FA. Test list: `README_DEVELOPER.md` §32.
+- **AI & MCP:** Settings → AI, then Admin → AI & MCP. Test list: `AI.md` §9.
+- **Team chat:** Main → Team chat. Who may chat / start chats: permissions `chat.view` / `chat.start`. Test list: `README_DEVELOPER.md` §33.
 
 ## 12. Later: turn this into a SaaS
 

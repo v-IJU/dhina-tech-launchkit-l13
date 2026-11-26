@@ -17,6 +17,7 @@ use Stancl\Tenancy\Database\Concerns\CentralConnection;
  * @property int $customers
  * @property int $storage_mb
  * @property int $logins_30d
+ * @property int $ai_tokens
  */
 class TenantUsage extends Model
 {

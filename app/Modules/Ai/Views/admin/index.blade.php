@@ -54,7 +54,7 @@
                 @endunless
 
                 <ol class="small ps-3 mb-3">
-                    <li>Create an API token on <a href="{{ route('admin.profile.edit') }}">My profile</a> &rsaquo; API tokens. <em>Read only</em> = the AI can look but not create drafts.</li>
+                    <li>Create a token on <a href="{{ route('admin.profile.edit', ['tab' => 'security']) }}">My profile</a> &rsaquo; API tokens with <strong>For: AI client (MCP)</strong>. <em>Read only</em> = the AI can look but not create drafts. (Normal API tokens don't work here, and AI tokens don't work on the API.)</li>
                     <li>Add the server to your AI client with the address and token below.</li>
                     <li>Ask it things like <em>"How many unread enquiries do we have?"</em> or <em>"Draft a blog post about…"</em>.</li>
                 </ol>
@@ -74,6 +74,43 @@
                 <div class="small fw-semibold mb-1">Claude Code</div>
                 <pre class="bg-body-tertiary border rounded-3 p-3 small mb-0"><code>claude mcp add --transport http {{ \Illuminate\Support\Str::slug(setting('site_name', config('app.name'))) }} {{ $mcpUrl }} --header "Authorization: Bearer paste-your-token-here"</code></pre>
             </x-admin.card>
+
+            @if ($usage['all_users'] && count($usage['per_user']))
+                <x-admin.card title="Usage per person" subtitle="This month" flush>
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead><tr><th>Person</th><th class="text-end">Questions</th><th class="text-end">MCP calls</th><th class="text-end">Tokens</th></tr></thead>
+                            <tbody>
+                            @foreach ($usage['per_user'] as $row)
+                                <tr><td>{{ $row['name'] }}</td><td class="text-end">{{ number_format($row['questions']) }}</td><td class="text-end">{{ number_format($row['mcp_calls']) }}</td><td class="text-end fw-semibold">{{ number_format($row['tokens']) }}</td></tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </x-admin.card>
+            @endif
+
+            <x-admin.card title="Recent AI activity" :subtitle="$usage['all_users'] ? 'Everyone' : 'Yours'" flush>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0 small">
+                        <thead><tr><th>When</th><th>Who</th><th>Where</th><th>Tools</th><th class="text-end">Tokens</th><th>Result</th></tr></thead>
+                        <tbody>
+                        @forelse ($usage['recent'] as $log)
+                            <tr>
+                                <td class="text-nowrap text-secondary" title="{{ $log->created_at }}">{{ $log->created_at->diffForHumans() }}</td>
+                                <td>{{ $log->user?->name ?? '—' }}</td>
+                                <td>{{ $log->channel === 'mcp' ? 'AI client (MCP)' : 'Assistant' }}<div class="text-secondary text-truncate" style="max-width: 160px">{{ $log->channel === 'mcp' ? $log->provider : $log->model }}</div></td>
+                                <td>@foreach ($log->tools ?? [] as $tool)<code class="me-1">{{ $tool }}</code>@endforeach</td>
+                                <td class="text-end">{{ $log->channel === 'assistant' ? number_format($log->totalTokens()) : '—' }}</td>
+                                <td><span class="badge badge-soft-{{ ['ok' => 'success', 'error' => 'danger', 'denied' => 'warning', 'limit' => 'warning'][$log->status] ?? 'secondary' }}" @if ($log->message && $log->status !== 'ok') title="{{ $log->message }}" @endif>{{ ['ok' => 'OK', 'error' => 'Error', 'denied' => 'Denied', 'limit' => 'Limit reached'][$log->status] ?? $log->status }}</span></td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="text-secondary">Nothing yet this month.</td></tr>
+                        @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </x-admin.card>
         </div>
 
         <div class="col-xl-4 d-flex flex-column gap-4">
@@ -82,6 +119,22 @@
                     <li><i class="bi {{ $mcpEnabled ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-secondary' }} me-1"></i> AI clients (MCP) {{ $mcpEnabled ? 'on' : 'off' }}</li>
                     <li><i class="bi {{ $assistantReady ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-secondary' }} me-1"></i> Assistant {{ $assistantReady ? 'ready: '.$providerName : 'needs a provider and key' }}</li>
                 </ul>
+            </x-admin.card>
+
+            <x-admin.card title="Usage this month" :subtitle="$usage['all_users'] ? 'Everyone on this site' : 'You'">
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-3 fw-bold">{{ number_format($usage['tokens']) }}</span>
+                    <span class="text-secondary small">assistant tokens{{ $usage['limit'] !== null ? ' of '.number_format($usage['limit']) : '' }}</span>
+                </div>
+                @if ($usage['limit'])
+                    @php $pct = min(100, $usage['tokens'] / max(1, $usage['limit']) * 100); @endphp
+                    <div class="progress mt-1" style="height: 6px"><div class="progress-bar {{ $pct >= 100 ? 'bg-danger' : ($pct > 80 ? 'bg-warning' : '') }}" style="width: {{ $pct }}%"></div></div>
+                @endif
+                <div class="row g-2 small mt-2">
+                    <div class="col-6"><div class="text-secondary">Questions</div><div class="fw-semibold">{{ number_format($usage['questions']) }}</div></div>
+                    <div class="col-6"><div class="text-secondary">MCP tool calls</div><div class="fw-semibold">{{ number_format($usage['mcp_calls']) }}</div></div>
+                </div>
+                <p class="small text-secondary mt-2 mb-0">Assistant tokens are billed on your {{ $providerName ?? 'AI provider' }} account. MCP clients use their own AI plan.</p>
             </x-admin.card>
 
             <x-admin.card title="Tools" subtitle="What an AI can do here, with your permissions." flush>

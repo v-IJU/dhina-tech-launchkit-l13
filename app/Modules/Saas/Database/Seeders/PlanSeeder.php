@@ -31,15 +31,15 @@ class PlanSeeder extends Seeder
             [
                 'slug' => 'business', 'name' => 'Business', 'description' => 'Website, blog and customer accounts with a mobile app API.',
                 'price_monthly' => 249900, 'price_yearly' => 2499000, 'trial_days' => 14, 'sort_order' => 2, 'is_featured' => true,
-                'modules' => [...$website, 'blog', 'customers'],
+                'modules' => [...$website, 'blog', 'customers', 'chat'],
                 'limits' => ['users' => 10, 'customers' => 5000, 'storage_mb' => 5120],
-                'features' => ['Everything in Starter', 'Blog', 'Customer accounts + app API', '10 staff users', '5,000 customers', '5 GB storage', 'Priority support'],
+                'features' => ['Everything in Starter', 'Blog', 'Customer accounts + app API', 'Team chat', '10 staff users', '5,000 customers', '5 GB storage', 'Priority support'],
             ],
             [
                 'slug' => 'enterprise', 'name' => 'Enterprise', 'description' => 'Everything, without limits.',
                 'price_monthly' => 699900, 'price_yearly' => 6999000, 'trial_days' => 30, 'sort_order' => 3,
-                'modules' => [...$website, 'blog', 'customers', 'ai'],
-                'limits' => ['users' => null, 'customers' => null, 'storage_mb' => null],
+                'modules' => [...$website, 'blog', 'customers', 'chat', 'ai'],
+                'limits' => ['users' => null, 'customers' => null, 'storage_mb' => null, 'ai_tokens' => 1000000],
                 'features' => ['Everything in Business', 'AI assistant + connect Claude/ChatGPT (MCP)', 'Unlimited users and customers', 'Unlimited storage', 'Own domain', 'Dedicated support'],
             ],
         ];

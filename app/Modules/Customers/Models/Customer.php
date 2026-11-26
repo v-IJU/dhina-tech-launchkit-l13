@@ -20,6 +20,8 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Laravel\Passkeys\Contracts\PasskeyUser;
+use Laravel\Passkeys\PasskeyAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -49,10 +51,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property Carbon|null $deleted_at
  * @property-read CustomerAddress|null $defaultAddress
  */
-class Customer extends Authenticatable implements MustVerifyEmail
+class Customer extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<CustomerFactory> */
-    use HasApiTokens, HasFactory, LogsActivity, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, LogsActivity, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
 
     public const STATUSES = ['active' => 'Active', 'blocked' => 'Blocked'];
 
@@ -170,5 +172,15 @@ class Customer extends Authenticatable implements MustVerifyEmail
     protected function avatarUrl(): Attribute
     {
         return Attribute::get(fn () => $this->avatar ? Storage::disk('uploads')->url($this->avatar) : null);
+    }
+
+    /**
+     * Customers keep their passkeys in customer_passkeys (admin users: passkeys).
+     *
+     * @return HasMany<CustomerPasskey, $this>
+     */
+    public function passkeys(): HasMany
+    {
+        return $this->hasMany(CustomerPasskey::class, 'user_id');
     }
 }

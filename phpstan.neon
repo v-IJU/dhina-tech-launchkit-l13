@@ -10,6 +10,8 @@ parameters:
     # Larastan reads migrations to know model columns. Add new module folders here.
     databaseMigrationsPath:
         - database/migrations
+        - app/Modules/Ai/Database/Migrations
+        - app/Modules/Chat/Database/Migrations
         - app/Modules/Blog/Database/Migrations
         - app/Modules/Faqs/Database/Migrations
         - app/Modules/Inbox/Database/Migrations
@@ -18,3 +20,12 @@ parameters:
         - app/Modules/Services/Database/Migrations
         - app/Modules/Sliders/Database/Migrations
         - app/Modules/Testimonials/Database/Migrations
+    ignoreErrors:
+        # Customers keep passkeys in their own table (customer_passkeys). laravel/passkeys types the
+        # relations with the base Passkey / Model, and Eloquent generics are invariant, so the
+        # narrower (correct) Customer types can't be expressed. Safe: both are covered by PasskeyTest.
+        -
+            identifier: method.childReturnType
+            paths:
+                - app/Modules/Customers/Models/Customer.php
+                - app/Modules/Customers/Models/CustomerPasskey.php

@@ -42,6 +42,7 @@ class Plan extends Model
         'users' => 'Staff users',
         'customers' => 'Customer accounts',
         'storage_mb' => 'File storage (MB)',
+        'ai_tokens' => 'AI tokens / month',
     ];
 
     protected $guarded = ['id'];

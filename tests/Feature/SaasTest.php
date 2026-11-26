@@ -6,6 +6,9 @@ namespace Tests\Feature;
 
 use App\Core\Settings\SettingsRepository;
 use App\Models\User;
+use App\Modules\Ai\Models\AiUsageLog;
+use App\Modules\Ai\Support\AiUsage;
+use App\Modules\Chat\Models\Message;
 use App\Modules\Saas\Database\Seeders\PlanSeeder;
 use App\Modules\Saas\Models\Invoice;
 use App\Modules\Saas\Models\Plan;
@@ -13,12 +16,15 @@ use App\Modules\Saas\Models\Subscription;
 use App\Modules\Saas\Models\Tenant;
 use App\Modules\Saas\Support\PlanLimits;
 use App\Modules\Saas\Support\TenantProvisioner;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -388,7 +394,7 @@ class SaasTest extends TestCase
         $tenant = $this->makeTenant('acme', 'enterprise'); // Enterprise includes AI
         tenancy()->initialize($tenant);
         app(SettingsRepository::class)->set(['ai_mcp_enabled' => true]);
-        $token = User::query()->where('email', 'owner@acme.com')->firstOrFail()->createToken('claude')->plainTextToken;
+        $token = User::query()->where('email', 'owner@acme.com')->firstOrFail()->createToken('claude', ['mcp', 'write'])->plainTextToken;
         tenancy()->end();
 
         $call = fn () => $this->withHeaders(['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json, text/event-stream'])
@@ -400,10 +406,51 @@ class SaasTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->withHeaders(['Authorization' => 'Bearer '.$token])->postJson('http://saas.test/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list'])->assertUnauthorized();
 
+        // Plan limit "AI tokens / month" (Enterprise: 1,000,000) applies when the tenant uses the platform key.
+        tenancy()->initialize($tenant);
+        $this->assertSame(1000000, app(AiUsage::class)->monthlyLimit());
+        AiUsageLog::query()->create(['channel' => 'assistant', 'input_tokens' => 1000000, 'output_tokens' => 5]);
+        $this->assertTrue(app(AiUsage::class)->limitReached());
+        $this->assertSame([1000005, 1000000], PlanLimits::usage()['ai_tokens']);
+        app(SettingsRepository::class)->set(['ai_api_key' => 'own-key']); // own key → plan limit no longer applies
+        $this->assertNull(app(AiUsage::class)->monthlyLimit());
+        tenancy()->end();
+        $this->artisan('saas:collect-usage', ['--tenant' => 'acme'])->assertSuccessful();
+        $this->assertDatabaseHas('tenant_usage', ['tenant_id' => 'acme', 'ai_tokens' => 1000005]);
+
         // Plan without AI → the endpoint doesn't exist for this tenant.
         $tenant->update(['plan_id' => Plan::query()->where('slug', 'starter')->value('id')]);
         $this->app['auth']->forgetGuards();
         $call()->assertNotFound();
+    }
+
+    public function test_team_chat_inside_a_tenant(): void
+    {
+        Storage::fake('chat');
+        $tenant = $this->makeTenant('acme', 'business'); // Business includes Team chat
+        tenancy()->initialize($tenant);
+        $colleague = User::query()->create(['name' => 'Ravi Staff', 'first_name' => 'Ravi', 'last_name' => 'Staff', 'username' => 'ravi', 'email' => 'ravi@acme.com', 'password' => Hash::make('Secret#123'), 'status' => 'active']);
+        $colleague->assignRole('editor');
+        tenancy()->end();
+        $owner = $this->owner($tenant);
+
+        $this->actingAs($owner)->get($this->host('acme', 'admin/chat'))->assertOk()->assertSee('Team chat');
+        $names = collect($this->actingAs($owner)->getJson($this->host('acme', 'admin/chat/users?q=ravi'))->assertOk()->json('users'))->pluck('name');
+        $this->assertSame(['Ravi Staff'], $names->all());
+
+        $id = $this->actingAs($owner)->postJson($this->host('acme', 'admin/chat/start'), ['user_id' => $colleague->id])->assertOk()->json('conversation.id');
+        $this->actingAs($owner)->post($this->host('acme', "admin/chat/{$id}/messages"), ['attachment' => UploadedFile::fake()->image('plan.png')], ['Accept' => 'application/json'])->assertOk();
+
+        tenancy()->initialize($tenant);
+        $path = (string) Message::query()->value('attachment_path');
+        tenancy()->end();
+        $this->assertStringStartsWith('tenantacme/', $path, 'files in the tenant\'s own folder');
+        Storage::disk('chat')->assertExists($path);
+
+        // Starter plan has no chat
+        $tenant->update(['plan_id' => Plan::query()->where('slug', 'starter')->value('id')]);
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($owner)->get($this->host('acme', 'admin/chat'))->assertNotFound();
     }
 
     public function test_expired_trial_is_suspended_after_grace(): void

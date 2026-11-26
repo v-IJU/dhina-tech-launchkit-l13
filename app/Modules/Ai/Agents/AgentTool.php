@@ -6,6 +6,7 @@ namespace App\Modules\Ai\Agents;
 
 use App\Models\User;
 use App\Modules\Ai\Mcp\Tools\SiteTool;
+use App\Modules\Ai\Support\AiUsage;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
@@ -33,6 +34,8 @@ final class AgentTool implements Tool
         if (! $this->tool->allows($this->user)) {
             return 'Permission denied.';
         }
+
+        app(AiUsage::class)->toolUsed($this->tool->name());
 
         return (string) json_encode($this->tool->run($request->all(), $this->user), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

@@ -81,6 +81,36 @@
                     </x-admin.card>
                 </form>
 
+                @if (setting('passkeys_enabled', true))
+                    <x-admin.card title="Passkeys" subtitle="Sign in with your fingerprint, face, Windows Hello or phone instead of a password. Counts as two-factor." :flush="true" class="mb-4">
+                        <div class="list-group list-group-flush">
+                            @forelse ($passkeys as $passkey)
+                                <div class="list-group-item d-flex align-items-center gap-3 py-3">
+                                    <i class="bi bi-fingerprint fs-5 text-secondary"></i>
+                                    <div class="flex-fill">
+                                        <div class="fw-semibold">{{ $passkey->name }} @if ($passkey->authenticator)<span class="badge badge-soft-secondary ms-1">{{ $passkey->authenticator }}</span>@endif</div>
+                                        <small class="text-secondary">Added {{ $passkey->created_at?->format('d M Y') }} · Last used {{ $passkey->last_used_at?->diffForHumans() ?? 'never' }}</small>
+                                    </div>
+                                    <x-admin.delete-button :action="route('admin.profile.passkeys.destroy', $passkey->id)" :confirm="'Remove passkey '.$passkey->name.'?'" body="You can no longer sign in with it. Your password still works." button="Remove" />
+                                </div>
+                            @empty
+                                <div class="p-4 text-secondary">No passkeys yet.</div>
+                            @endforelse
+                        </div>
+                        <x-slot:footer>
+                            <div data-passkey-supported hidden class="w-100">
+                                <form data-passkey-register data-options-url="{{ route('admin.profile.passkeys.options') }}" data-store-url="{{ route('admin.profile.passkeys.store') }}" class="row g-2 align-items-end">
+                                    <x-admin.form.input class="col-md-5" name="name" label="Name" placeholder="e.g. My laptop, iPhone" maxlength="60" />
+                                    <x-admin.form.input class="col-md-4" name="password" id="passkey_password" type="password" label="Your password" required autocomplete="current-password" />
+                                    <div class="col-md-3"><button type="submit" class="btn btn-primary w-100"><i class="bi bi-fingerprint me-1"></i> Add passkey</button></div>
+                                    <div class="col-12 text-danger small" data-passkey-error hidden role="alert"></div>
+                                </form>
+                            </div>
+                            <div class="small text-secondary" data-passkey-unsupported>This browser can't create passkeys. Use a recent Chrome, Edge, Safari or Firefox.</div>
+                        </x-slot:footer>
+                    </x-admin.card>
+                @endif
+
                 <x-admin.card title="Two-factor authentication" subtitle="A 6-digit code from an authenticator app at every sign-in.">
                     <x-slot:actions>
                         <span class="badge {{ $user->two_factor_confirmed_at ? 'badge-soft-success' : 'badge-soft-warning' }}">{{ $user->two_factor_confirmed_at ? 'Enabled' : 'Disabled' }}</span>
@@ -182,8 +212,14 @@
                                 <div class="list-group-item d-flex align-items-center gap-3 py-3">
                                     <i class="bi bi-key fs-5 text-secondary"></i>
                                     <div class="flex-fill">
+                                        @php
+                                            $abilities = $token->abilities ?? [];
+                                            $isAi = in_array('mcp', $abilities, true);
+                                            $canWrite = in_array('*', $abilities, true) || in_array('write', $abilities, true);
+                                        @endphp
                                         <div class="fw-semibold">{{ $token->name }}
-                                            <span class="badge {{ in_array('*', $token->abilities ?? [], true) ? 'badge-soft-primary' : 'badge-soft-secondary' }} ms-1">{{ in_array('*', $token->abilities ?? [], true) ? 'Full access' : 'Read only' }}</span>
+                                            <span class="badge {{ $isAi ? 'badge-soft-info' : 'badge-soft-secondary' }} ms-1"><i class="bi {{ $isAi ? 'bi-robot' : 'bi-plug' }} me-1"></i>{{ $isAi ? 'AI client (MCP)' : 'API' }}</span>
+                                            <span class="badge {{ $canWrite ? 'badge-soft-primary' : 'badge-soft-secondary' }} ms-1">{{ $canWrite ? 'Full access' : 'Read only' }}</span>
                                             @if ($token->expires_at?->isPast())<span class="badge badge-soft-danger ms-1">Expired</span>@endif
                                         </div>
                                         <small class="text-secondary">
@@ -201,10 +237,17 @@
                         <x-slot:footer>
                             <form method="POST" action="{{ route('admin.profile.tokens.store') }}" class="row g-2 w-100 align-items-end">
                                 @csrf
-                                <x-admin.form.input class="col-md-4" name="token_name" label="Name" placeholder="e.g. Mobile app" required />
-                                <x-admin.form.select class="col-md-3" name="token_access" label="Access" :options="['full' => 'Full access', 'read' => 'Read only']" value="full" />
-                                <x-admin.form.select class="col-md-3" name="token_expires" label="Expires" :options="['never' => 'Never', '30' => 'In 30 days', '90' => 'In 90 days', '365' => 'In 1 year']" value="90" />
+                                @php $aiTokens = module_enabled('ai') && auth()->user()->can('ai.mcp'); @endphp
+                                <x-admin.form.input class="{{ $aiTokens ? 'col-md-3' : 'col-md-4' }}" name="token_name" label="Name" placeholder="e.g. Mobile app, Claude Code – laptop" required />
+                                @if ($aiTokens)
+                                    <x-admin.form.select class="col-md-3" name="token_for" label="For" :options="['api' => 'Apps (REST API)', 'mcp' => 'AI client (MCP)']" value="api" />
+                                @endif
+                                <x-admin.form.select class="{{ $aiTokens ? 'col-md-2' : 'col-md-3' }}" name="token_access" label="Access" :options="['full' => 'Full access', 'read' => 'Read only']" value="full" />
+                                <x-admin.form.select class="{{ $aiTokens ? 'col-md-2' : 'col-md-3' }}" name="token_expires" label="Expires" :options="['never' => 'Never', '30' => 'In 30 days', '90' => 'In 90 days', '365' => 'In 1 year']" value="90" />
                                 <div class="col-md-2"><button class="btn btn-primary w-100">Create</button></div>
+                                @if ($aiTokens)
+                                    <div class="col-12 small text-secondary">AI client tokens only work on <code>/mcp</code> (Claude, ChatGPT, Cursor…), never on the REST API.@if ((int) setting('ai_token_days', 90) > 0) They expire within {{ (int) setting('ai_token_days', 90) }} days at most.@endif</div>
+                                @endif
                             </form>
                         </x-slot:footer>
                     </x-admin.card>

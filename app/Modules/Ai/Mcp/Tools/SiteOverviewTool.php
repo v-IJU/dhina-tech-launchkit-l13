@@ -40,7 +40,7 @@ class SiteOverviewTool extends SiteTool
             'site_name' => (string) setting('site_name', config('app.name')),
             'website_url' => url('/'),
             'admin_url' => url((string) config('starter.admin_path')),
-            'signed_in_as' => ['name' => $user->name, 'email' => $user->email, 'roles' => $user->getRoleNames()->all()],
+            'signed_in_as' => ['name' => $this->person($user->name), 'email' => $this->email($user->email), 'roles' => $user->getRoleNames()->all()],
             'counts' => $counts,
         ];
     }

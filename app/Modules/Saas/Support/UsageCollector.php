@@ -6,6 +6,7 @@ namespace App\Modules\Saas\Support;
 
 use App\Models\LoginEvent;
 use App\Models\User;
+use App\Modules\Ai\Support\AiUsage;
 use App\Modules\Customers\Models\Customer;
 use App\Modules\Saas\Models\Tenant;
 use App\Modules\Saas\Models\TenantUsage;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
- * Measures one tenant (users, customers, storage, sign-ins) and saves today's row in tenant_usage.
+ * Measures one tenant (users, customers, storage, sign-ins, AI tokens this month) and saves today's row in tenant_usage.
  * Run for everyone nightly by saas:collect-usage; the console shows the latest numbers and history.
  */
 class UsageCollector
@@ -26,6 +27,7 @@ class UsageCollector
             'customers' => Schema::hasTable('customers') ? Customer::query()->count() : 0,
             'logins_30d' => LoginEvent::query()->where('event', 'login')->where('created_at', '>=', now()->subDays(30))->count(),
             'storage_mb' => $this->storageMb(),
+            'ai_tokens' => Schema::hasTable('ai_usage_logs') ? app(AiUsage::class)->monthTokens() : 0,
         ]);
 
         // whereDate: a "date" column comes back as "2026-11-20 00:00:00" on SQLite, "2026-11-20" on MySQL.

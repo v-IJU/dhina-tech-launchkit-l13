@@ -14,6 +14,7 @@ import './js/page-builder';
 import './js/menu-builder';
 import './js/dashboard';
 import './js/realtime';
+import './js/passkeys';
 
 // Module scripts: every app/Modules/*/Resources/js/admin/*.js is included automatically,
 // so a module's JavaScript lives (and is deleted) with the module.
