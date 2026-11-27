@@ -186,7 +186,7 @@ config/starter.php             starter settings: admin path, menu groups, API ve
 config/tenancy.php             SaaS: central domains, tenant databases, what is isolated per tenant
 database/                      core migrations + seeders (DatabaseSeeder, TenantDatabaseSeeder, DemoContentSeeder)
 stubs/module/                  templates for make:module: edit them to change generated code
-tests/Feature/                 199 tests (single business + SaaS + convert + AI + passkeys + chat)
+tests/Feature/                 208 tests (single business + SaaS + convert + AI + passkeys + chat)
 docker/                        Dockerfile (dev + production targets), nginx, php.ini
 compose.yaml                   local stack       compose.prod.yaml + deploy.sh   servers
 ```
@@ -411,7 +411,7 @@ To let AI do something new in your module, write one tool class (extend `App\Mod
 ## 9. Tests and code quality
 
 ```bash
-art test                                          # 199 tests
+art test                                          # 208 tests
 art test --filter=SaasTest                        # one class
 docker compose exec app ./vendor/bin/pint         # code style (fixes files)
 docker compose exec app ./vendor/bin/phpstan analyse --memory-limit=1G    # Larastan

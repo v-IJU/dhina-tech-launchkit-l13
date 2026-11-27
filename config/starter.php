@@ -10,6 +10,9 @@ return [
     |   Redis + Horizon:  IMPORT_QUEUE_CONNECTION=redis-imports (config/queue.php, retry_after 3700;
     |                     Horizon runs it with the "imports" supervisor in config/horizon.php).
     */
+    // Staging behind a browser password: "user:password". Empty = off (production). App\Http\Middleware\StagingLock
+    'staging_basic_auth' => env('STAGING_BASIC_AUTH', ''),
+
     'imports' => [
         'connection' => env('IMPORT_QUEUE_CONNECTION') ?: null,   // null = QUEUE_CONNECTION
         'queue' => env('IMPORT_QUEUE', 'imports'),

@@ -35,6 +35,12 @@ return [
     |
     */
 
+    /*
+    | Staging / testing: send EVERY email to this address (comma-separated for several) instead of the
+    | real recipients. App\Core\Mail\RedirectMailOnStaging. Production: leave empty.
+    */
+    'always_to' => env('MAIL_ALWAYS_TO'),
+
     'mailers' => [
 
         'smtp' => [

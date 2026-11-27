@@ -25,6 +25,14 @@ x-php: &php
   image: ${APP_IMAGE:-laravel13-app}:${APP_TAG:-latest}
   restart: unless-stopped
   logging: *logging
+  environment:
+    # PHP-FPM workers (docker/php/www.conf). ≈ RAM for PHP / 60 MB. Change in .env, then ./deploy.sh restart.
+    PHP_FPM_MAX_CHILDREN: ${PHP_FPM_MAX_CHILDREN:-12}
+    PHP_FPM_START_SERVERS: ${PHP_FPM_START_SERVERS:-3}
+    PHP_FPM_MIN_SPARE: ${PHP_FPM_MIN_SPARE:-2}
+    PHP_FPM_MAX_SPARE: ${PHP_FPM_MAX_SPARE:-6}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"   # reach a MySQL / Redis installed on the server itself
   volumes:
     - ./.env:/var/www/html/.env:ro
     - storage:/var/www/html/storage
@@ -69,7 +77,9 @@ services:
   horizon:
     <<: *php
     command: ["php", "artisan", "horizon"]
-    stop_grace_period: 60s   # let running jobs finish on deploy
+    # On deploy, running jobs get this long to finish. deploy.sh also waits for running imports first
+    # (imports:wait), so a long import is never cut off halfway.
+    stop_grace_period: ${HORIZON_STOP_GRACE:-120s}
     healthcheck:
       test: ["CMD", "php", "artisan", "horizon:status"]
       interval: 30s
@@ -91,6 +101,9 @@ services:
     profiles: ["mysql"]
     restart: unless-stopped
     logging: *logging
+    # Memory for data + indexes: the biggest speed setting. ~50% of RAM on a database-only box,
+    # 25-30% when it shares the server with the app (4 GB → 1G). Other settings: docker/mysql/my.cnf
+    command: ["mysqld", "--innodb-buffer-pool-size=${MYSQL_BUFFER_POOL:-1G}"]
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-starter}
       MYSQL_USER: ${DB_USERNAME:-starter}
@@ -98,6 +111,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-}   # set both in .env when using this container
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/zz-launchkit.cnf:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
@@ -109,7 +123,9 @@ services:
     profiles: ["redis"]
     restart: unless-stopped
     logging: *logging
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    # maxmemory: never let Redis eat the whole server. noeviction = queued jobs are never thrown away;
+    # when full, new writes fail with an error you see (raise REDIS_MAXMEMORY or move to ElastiCache).
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "${REDIS_MAXMEMORY:-512mb}", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis-data:/data
     healthcheck:

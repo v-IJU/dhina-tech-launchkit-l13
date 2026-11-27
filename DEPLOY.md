@@ -198,6 +198,64 @@ RDS: MySQL 8.4, same VPC, security group allowing 3306 from the app servers only
 
 ---
 
+### 5.1 Queues: what runs where
+
+| Queue | Jobs | Worker |
+| --- | --- | --- |
+| `default` | emails, notifications, chat broadcasts, AI alerts | Horizon `supervisor-1` |
+| `imports` | big Excel / CSV imports (one job of up to 1 hour) | Horizon `supervisor-imports` (1 process, timeout 3600) |
+
+`.env` for Redis + Horizon (the `horizon` container runs both supervisors):
+
+```env
+QUEUE_CONNECTION=redis
+IMPORT_QUEUE_CONNECTION=redis-imports   # Redis connection with retry_after 3700 (long jobs)
+IMPORT_QUEUE=imports
+```
+
+If you use **SQS** instead: `QUEUE_CONNECTION=sqs`, `IMPORT_QUEUE_CONNECTION=` (empty), create SQS queues `default` (visibility 90 s) and `imports` (visibility **3600 s**), and replace the `horizon` service with two `queue:work` services (README_DEVELOPER §24c). Horizon only works with Redis.
+
+After every deploy workers must load the new code: `deploy.sh` does `horizon:terminate`; with plain workers run `art queue:restart`.
+
+---
+
+### 5.2 Server sizing: memory for each part
+
+Everything on one server shares its RAM. Set these in `.env`, then `./deploy.sh restart`:
+
+| `.env` | What | 4 GB (t3.medium, all on one box) | 8 GB (t3.large) | Database on RDS |
+| --- | --- | --- | --- | --- |
+| `PHP_FPM_MAX_CHILDREN` | PHP requests at the same time (~60 MB each) | 12 | 25 | 4 GB: 20 · 8 GB: 40 |
+| `MYSQL_BUFFER_POOL` | MySQL container's memory for data + indexes (the biggest speed setting) | 1G | 2G | (not used: size the RDS instance) |
+| `REDIS_MAXMEMORY` | Redis container cap | 512mb | 1gb | 512mb |
+| `HORIZON_MAX_PROCESSES` | queue workers (emails, notifications…) | 5 | 10 | 5–10 |
+
+Check with `docker stats` (memory per container) and `free -h`. Memory always above ~80%, or swap in use all day: lower the numbers or move to a bigger instance.
+
+### 5.3 Changing PHP, PHP-FPM and MySQL settings
+
+They're files in the project (so every server gets the same, tested settings), not files on the server:
+
+| Setting | File | Apply |
+| --- | --- | --- |
+| `memory_limit`, upload sizes, OPcache | `docker/php/php.ini` | commit + `./deploy.sh` (rebuilds the image) |
+| PHP-FPM workers, slow-request log (>10 s), stuck-request kill (130 s) | `docker/php/www.conf` (numbers from `.env`) | numbers: `./deploy.sh restart`; the file: `./deploy.sh` |
+| MySQL container: connections, binlogs (3 days), slow query log (>1 s), flush mode | `docker/mysql/my.cnf` | `docker compose -f compose.prod.yaml restart mysql` |
+| nginx: upload size, caching, real visitor IP | `docker/nginx/production.conf` | `./deploy.sh` |
+
+Useful checks:
+
+```bash
+dc() { docker compose -f compose.prod.yaml "$@"; }
+dc exec mysql mysql -uroot -p -e "SHOW VARIABLES LIKE 'innodb_buffer_pool_size'"   # MySQL memory
+dc exec mysql tail -f /var/lib/mysql/slow.log                                        # slow queries
+dc logs app | grep -A15 "executing too slow"                                          # slow PHP pages with stack trace
+dc exec app php-fpm -tt 2>&1 | grep pm.max_children                                    # PHP workers
+dc exec redis redis-cli info memory | grep used_memory_human                           # Redis memory
+```
+
+---
+
 ## 6. Health checks
 
 | Check | Used by | Fails when |
@@ -271,7 +329,8 @@ Once you run more than one app server, three things must be shared:
 | What | How |
 | --- | --- |
 | Database, Redis | RDS + ElastiCache (`COMPOSE_PROFILES=` empty) |
-| Uploaded files | S3: `composer require league/flysystem-aws-s3-v3`, then `.env`: `FILESYSTEM_DISK=s3`, `MEDIA_DISK=s3`, `AWS_*` values. (The `storage` volume is per server) |
+| Uploaded files | S3: `.env` `UPLOADS_DISK=s3` + `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (or an instance IAM role), `AWS_DEFAULT_REGION`, `AWS_BUCKET`. Team chat files follow automatically (`CHAT_DISK` empty = private S3 prefix `chat/`). The `storage` volume is per server |
+| Excel imports | The upload and the queued job may be on different servers: publish `config/excel.php` (`art vendor:publish --provider="Maatwebsite\Excel\ExcelServiceProvider" --tag=config`), set `temporary_files.remote_disk => 's3'`, and change `ImportRun::DISK` to `'s3'` |
 | Maintenance mode | Already shared: `APP_MAINTENANCE_DRIVER=cache` + `APP_MAINTENANCE_STORE=redis` |
 
 The scheduler runs on every server, but the jobs that matter use `->onOneServer()`, which takes a Redis lock, so they run once.
@@ -406,22 +465,138 @@ Short alias on the server: `echo "alias dc='docker compose -f compose.prod.yaml'
 - [ ] `APP_KEY` set **and saved somewhere safe** (password manager)
 - [ ] `SESSION_SECURE_COOKIE=true`, `LOG_LEVEL=warning`
 - [ ] Real mail (SES/SMTP); send a test from **Settings → Mail**
+- [ ] `IMPORT_QUEUE_CONNECTION=redis-imports`, `IMPORT_QUEUE=imports` (or the SQS setup in section 5.1)
+- [ ] `UPLOADS_DISK=s3` if you have (or may later have) more than one server
+- [ ] Never `APP_DEBUG=true`: Debugbar isn't even installed in the image (`--no-dev`), but error pages would show secrets
 
 **Admin panel**
-- [ ] **Settings → Security:** enforce 2FA for admins
+- [ ] **Settings → Security:** enforce 2FA for admins (passkeys count as 2FA and need HTTPS)
+- [ ] **Roles:** give each staff member the smallest role that works; only you are super admin
+- [ ] **Settings → AI:** MCP off unless a client really uses it; monthly token limit set
+- [ ] **Settings → Team chat / Import & export:** limits fit the project
 - [ ] **Settings → Monitoring:** error email set
 - [ ] **Settings → Customers:** off if the project has no customer accounts
 - [ ] **Settings → General / Branding / SEO:** site name, logo, brand colour, contact details, meta tags
 
 **Backups and checks**
 - [ ] `BACKUP_DISKS=local,s3` and a backup run from **Admin → Backups** that shows up in S3
-- [ ] `./deploy.sh status`: all OK; Horizon and scheduler running
+- [ ] `./deploy.sh status`: all OK; Horizon (both supervisors at `/admin/horizon`) and scheduler running
+- [ ] A test import of a few thousand rows finishes in the background
 
 **Infrastructure**
 - [ ] HTTPS works, and http redirects to https
 - [ ] Load balancer health check on `/up`
 - [ ] Port 22 limited to your IP or VPN; MySQL / Redis not reachable from the internet
 - [ ] Domain email: SPF, DKIM (SES) and DMARC records
+
+---
+
+## 11b. Real-world problems and how this setup prevents them
+
+| What goes wrong on live servers | Prevented by |
+| --- | --- |
+| Site slow under load while CPU is idle (only 5 PHP workers, Docker's default) | `docker/php/www.conf`: `PHP_FPM_MAX_CHILDREN` (section 5.2) |
+| Disk full after a few months: MySQL binary logs (kept 30 days by default) | `docker/mysql/my.cnf`: `binlog_expire_logs_seconds` = 3 days |
+| Disk full: Docker build cache from building on the server | `deploy.sh` prunes build cache older than 7 days and keeps 3 image versions |
+| Disk full: container logs | `compose.prod.yaml`: logs rotate at 10 MB × 5 per container; Laravel daily logs kept 14 days |
+| Site hangs every night during the backup (mysqldump locks tables) | `config/database.php`: `--single-transaction --skip-lock-tables --quick` |
+| Server runs out of RAM, Linux kills MySQL | `REDIS_MAXMEMORY`, `MYSQL_BUFFER_POOL`, `HORIZON_MAX_PROCESSES` sized for the box; swap (below) |
+| A deploy cuts a big Excel import in half | `deploy.sh` runs `imports:wait` (up to 15 min, `DEPLOY_IMPORT_WAIT`) before restarting workers |
+| A deploy kills queued emails mid-send | Horizon gets `HORIZON_STOP_GRACE` (120 s) to finish running jobs |
+| Workers run old code after a deploy | `deploy.sh` recreates the horizon container |
+| One stuck request blocks a PHP worker forever | `request_terminate_timeout` 130 s; nginx `fastcgi_read_timeout` 120 s |
+| A slow page and nobody knows which | PHP-FPM slow log (> 10 s, with stack trace) and MySQL slow query log (> 1 s) |
+| Every visitor appears with the load balancer's IP (rate limits hit everyone at once) | `production.conf`: `set_real_ip_from` + Laravel `trustProxies` |
+| New version broken | `/up` health check after every deploy, automatic rollback |
+| A server reboot leaves the site down | `restart: unless-stopped` on every container; Docker starts on boot |
+
+**On the server itself (once, takes 10 minutes):**
+
+```bash
+# Swap: a safety net so a memory spike slows the box down instead of killing MySQL
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf && sudo sysctl --system
+
+# Security updates install themselves
+sudo apt install -y unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades
+
+# Firewall: SSH + web only (AWS security groups do the same; this is a second lock)
+sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw --force enable
+#   Note: Docker publishes ports past ufw. Keep MySQL / Redis WITHOUT "ports:" (as in compose.prod.yaml).
+
+# Repeated SSH login attempts get blocked
+sudo apt install -y fail2ban
+
+# Secrets readable by you only
+chmod 600 /srv/app/.env
+```
+
+**In AWS (once):**
+
+| What | Why |
+| --- | --- |
+| EC2 → **Credit specification: Unlimited** (t3 instances) | t3 CPUs slow down to 20% when burst credits run out (long imports, traffic peaks). Unlimited keeps full speed for a small extra cost only when used |
+| **EBS snapshots** daily (Data Lifecycle Manager, keep 7) | Restore the whole server (Docker volumes, MySQL container data) in minutes. Extra to the app's own backups to S3 |
+| **CloudWatch alarms**: CPU > 80% for 15 min, **disk > 80%**, status check failed (CloudWatch agent for memory and disk) | You hear about it before the client does |
+| **Uptime check** on `https://domain/up` (Route 53 health check, UptimeRobot, Better Stack…) | Site down → email or SMS within a minute |
+| Elastic IP (single server without a load balancer) | The IP survives a stop/start |
+
+---
+
+## 13. Staging
+
+Staging runs the **same `compose.prod.yaml` and `deploy.sh`** as production: what you test is exactly what goes live. Only the `.env` and the folder differ.
+
+| | Production | Staging |
+| --- | --- | --- |
+| Folder | `/srv/app` | `/srv/app-staging` |
+| `.env` from | `.env.production.example` | `.env.staging.example` (every difference marked `◀ STAGING`) |
+| Branch | `main` | `staging` (`DEPLOY_BRANCH=staging ./deploy.sh`) |
+| `APP_ENV` | `production` | `staging` |
+| Containers, volumes | `COMPOSE_PROJECT_NAME=laravel13` | `laravel13-staging` (fully separate) |
+| Images | `APP_IMAGE=laravel13-app` | `laravel13-app-staging` (cleanup never touches production's) |
+| Port | `WEB_PORT=80` | `8081` (same server) |
+| Database | RDS or its own | `starter_staging`, usually the `mysql` container (`COMPOSE_PROFILES=mysql,redis`) |
+| Visible to | everyone | only people with `STAGING_BASIC_AUTH` (browser login box) |
+| Google | indexed | `X-Robots-Tag: noindex` + `robots.txt` Disallow, always |
+| Emails | real recipients | all to `MAIL_ALWAYS_TO` (subject `[STAGING] …`, real recipients in `X-Original-To`) |
+| Payment keys | live | **test** keys only |
+| Sizing | section 5.2 | small: 5 PHP workers, MySQL 256M, Redis 128mb, 2 Horizon workers |
+
+Staging behaves like production in everything else: OPcache, cached config, no lazy-loading errors, HSTS, the same Horizon supervisors (`config/horizon.php` → `staging`), the same queues.
+
+### First install
+
+```bash
+git clone git@github.com:your-org/client-project.git /srv/app-staging
+cd /srv/app-staging
+git checkout staging
+cp .env.staging.example .env && nano .env      # every CHANGE_ME; a NEW APP_KEY (never production's)
+docker compose -f compose.prod.yaml build app
+docker compose -f compose.prod.yaml run --rm --no-deps app php artisan key:generate --show   # → APP_KEY
+DEPLOY_BRANCH=staging ./deploy.sh
+docker compose -f compose.prod.yaml exec app php artisan starter:install --email=you@company.com --password='…'
+```
+
+### Domain
+
+- **Same server as production, ALB in front:** a second target group on port **8081**, and a listener rule *Host header = staging.example.com → that target group*. Add `staging.example.com` to the ACM certificate.
+- **Same server, host nginx / Caddy:** a second `server_name staging.example.com` → `proxy_pass http://127.0.0.1:8081` (the websocket headers as in section 4).
+- **Own small server** (t3.small): `WEB_PORT=80` there, nothing else changes.
+
+### Every update
+
+```bash
+# your machine: merge to staging and push, then on the server:
+cd /srv/app-staging && DEPLOY_BRANCH=staging ./deploy.sh
+# client approves on staging → merge staging into main → on the server:
+cd /srv/app && ./deploy.sh
+```
+
+### Real data on staging (optional)
+
+Restore the latest production backup into staging (section 9.2, into `starter_staging`) to test with real volumes. Keep `MAIL_ALWAYS_TO` set when you do, so no customer ever gets a staging email. Then run `php artisan tinker --execute="App\Models\User::query()->update(['password' => bcrypt('Staging#123')]);"` if the team needs to sign in as other users.
 
 ---
 

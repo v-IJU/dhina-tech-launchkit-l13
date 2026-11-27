@@ -15,6 +15,7 @@
 #   DEPLOY_BRANCH   branch to deploy            (default: the branch that is checked out)
 #   HEALTH_URL      URL that must answer 200    (default: http://127.0.0.1:${WEB_PORT}/up)
 #   KEEP_IMAGES     old versions to keep        (default: 3)
+#   DEPLOY_IMPORT_WAIT  seconds to wait for running background imports before restarting workers (default: 900, 0 = don't wait)
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,7 +25,8 @@ STATE_DIR=.deploy
 mkdir -p "$STATE_DIR"
 
 # Read a value from .env without "source"-ing it (Laravel .env files are not shell scripts).
-env_value() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true; }
+# Strips inline comments ("WEB_PORT=8081   # note") and quotes, like Docker Compose and Laravel do.
+env_value() { grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- | sed -E 's/[[:space:]]+#.*$//; s/^[[:space:]]+|[[:space:]]+$//g' | tr -d '"' || true; }
 
 IMAGE="$(env_value APP_IMAGE)"; IMAGE="${IMAGE:-laravel13-app}"
 WEB_PORT="$(env_value WEB_PORT)"; WEB_PORT="${WEB_PORT:-80}"
@@ -60,6 +62,8 @@ prune_images() {
             | xargs -r -I{} docker rmi "$repo:{}" >/dev/null 2>&1 || true
     done
     docker image prune -f >/dev/null
+    # Building on the server leaves a build cache that grows on every deploy until the disk is full.
+    docker builder prune -f --filter until=168h >/dev/null 2>&1 || true
 }
 
 deploy() {
@@ -95,6 +99,12 @@ deploy() {
         say "Tenant database migrations"
         artisan tenants:migrate --force
         artisan tenants:run module:sync
+    fi
+
+    # Don't cut off a big Excel import halfway: wait for running background imports (max DEPLOY_IMPORT_WAIT s).
+    if [ -n "$previous" ] && [ "${DEPLOY_IMPORT_WAIT:-900}" != "0" ]; then
+        say "Waiting for running imports"
+        artisan imports:wait --timeout="${DEPLOY_IMPORT_WAIT:-900}" || true
     fi
 
     local ok=true

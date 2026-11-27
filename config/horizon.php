@@ -227,7 +227,18 @@ return [
     'environments' => [
         'production' => [
             'supervisor-1' => [
-                'maxProcesses' => 10,
+                // Workers for the default queue. 10 needs ~1.5 GB RAM; on a 4 GB server shared with MySQL use 3-5.
+                'maxProcesses' => (int) env('HORIZON_MAX_PROCESSES', 5),
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
+        ],
+
+        // Staging = a copy of production (same supervisors), usually on a smaller server.
+        // Without this entry Horizon starts NO workers when APP_ENV=staging.
+        'staging' => [
+            'supervisor-1' => [
+                'maxProcesses' => (int) env('HORIZON_MAX_PROCESSES', 3),
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],

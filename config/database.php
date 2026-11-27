@@ -62,6 +62,9 @@ return [
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ], fn ($value) => $value !== null) : [],
+            // Backups (spatie/laravel-backup → mysqldump): read a consistent snapshot WITHOUT locking tables,
+            // and stream rows instead of loading whole tables into memory. The site keeps working during the nightly backup.
+            'dump' => ['useSingleTransaction', 'skipLockTables', 'useQuick'],
         ],
 
         'mariadb' => [

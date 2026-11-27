@@ -10,6 +10,7 @@ use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\IdentifyTenant;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetWebsiteLocale;
+use App\Http\Middleware\StagingLock;
 use App\Http\Middleware\WebsiteMaintenance;
 use App\Modules\Customers\Http\Middleware\CustomerAccountsEnabled;
 use App\Modules\Customers\Http\Middleware\CustomerApiAccess;
@@ -50,7 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->preventRequestForgery(except: ['billing/webhooks/*'], originOnly: false, allowSameSite: false);
 
         // SaaS mode: pick the tenant from the host before sessions start (no-op in single-business mode).
-        $middleware->web(prepend: [IdentifyTenant::class], append: [SecurityHeaders::class]);
+        $middleware->web(prepend: [StagingLock::class, IdentifyTenant::class], append: [SecurityHeaders::class]);
         $middleware->api(prepend: [IdentifyTenant::class, ForceJsonResponse::class]);
 
         $middleware->alias([

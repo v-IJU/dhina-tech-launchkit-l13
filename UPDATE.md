@@ -13,6 +13,8 @@ This update adds these features to an existing project made from the starter. It
 | **Extra permissions per user** | Users → key icon: give one person permissions on top of their role (`users.permissions`) |
 | **Role sidebar preview** | Roles → Add/Edit: live "Sidebar for this role" card while ticking permissions |
 | **Monitoring**          | System → Monitoring → **Error log**, **Failed jobs**, **Log files** (`/admin/logs`); Settings → Monitoring; `/up` and `php artisan health:check` |
+| **Staging** | Same `compose.prod.yaml` + `deploy.sh`, own `.env` (`.env.staging.example`): Horizon `staging` supervisors, password lock (`STAGING_BASIC_AUTH`), never indexed, all mail to `MAIL_ALWAYS_TO`. DEPLOY.md §13 |
+| **Production hardening** | PHP-FPM workers from `.env` (was Docker's 5), MySQL container config (`docker/mysql/my.cnf`: binlogs 3 days, slow log), non-locking backups, Redis memory cap, deploys wait for running imports, build-cache cleanup, real visitor IP in nginx. DEPLOY.md §5.2, §5.3, §11b |
 | **No self-promotion** | Managers of roles/users can only give permissions and roles they have themselves, can't edit their own role, and can't edit, delete or sign in as a bigger account (README_DEVELOPER §6.10b) |
 | **Excel import & export** | Laravel Excel (maatwebsite/excel): Import accepts .xlsx/.csv, big files run in the background in chunks with a progress bar and notification; Export → Excel or CSV. Each module has `Imports/` and `Exports/` classes. Settings → Import & export |
 | **Debugbar (local)** | Bar at the bottom of each page with the Blade views, queries and route used (dev dependency only) |
@@ -38,6 +40,7 @@ docker compose exec app php artisan backup:run --only-db
 - `app/Modules/{Users,Blog,Pages,Faqs,Services,Sliders,Testimonials,Inbox,Settings,Menus,Modules}/...` (the files listed in this zip)
 - `app/Providers/AppServiceProvider.php`, `bootstrap/app.php` (now `preventRequestForgery(...)` instead of `validateCsrfTokens(...)`), `config/auth.php`, `config/backup.php`, `config/starter.php`, `routes/console.php`
 - `app/Http/Middleware/SecurityHeaders.php` (microphone allowed for chat voice notes), `config/filesystems.php` (new private `chat` disk)
+- `compose.prod.yaml`, `deploy.sh`, `docker/php/Dockerfile`, `docker/nginx/production.conf`, `config/database.php` (backup dump options); new `docker/php/www.conf`, `docker/mysql/my.cnf`. Add the **Server sizing** block from `.env.production.example` to your server's `.env`
 - `config/queue.php` (new `redis-imports` connection), `config/horizon.php` (new `supervisor-imports`), `config/starter.php` (new `imports` block; `import_max_rows` / `import_max_kb` removed)
 - `docker/php/Dockerfile` (new `web` target), `resources/admin/js/realtime.js`, `resources/views/layouts/admin.blade.php`
 - `resources/views/layouts/web.blade.php`, `resources/views/components/admin/datatable.blade.php`
@@ -87,7 +90,7 @@ docker compose run --rm node sh -c "npm install && npm run build"
 # 6. restart the background containers so they load the new code
 docker compose restart horizon scheduler reverb
 
-# 7. check everything: expect "199 passed"
+# 7. check everything: expect "208 passed"
 docker compose exec app php artisan test
 ```
 

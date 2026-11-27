@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Core\Health\HealthCheck;
+use App\Core\Mail\RedirectMailOnStaging;
 use App\Core\Menus\MenuService;
 use App\Core\Security\LoginRecorder;
 use App\Core\Settings\SettingsRepository;
@@ -20,6 +21,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -50,7 +52,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Model::preventLazyLoading(! $this->app->isProduction());
+        Event::listen(MessageSending::class, RedirectMailOnStaging::class);
+
+        // Strict in development; staging behaves exactly like production (what you test is what goes live).
+        Model::preventLazyLoading(! $this->app->environment(['production', 'staging']));
         Paginator::useBootstrapFive();
 
         // super-admin passes every permission check.

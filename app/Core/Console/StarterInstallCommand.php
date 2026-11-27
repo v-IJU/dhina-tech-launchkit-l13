@@ -58,7 +58,7 @@ class StarterInstallCommand extends Command
         $saas = (bool) config('starter.tenancy.enabled');
 
         if ($this->option('fresh')) {
-            if ($this->laravel->isProduction() && ! $this->confirm('This deletes ALL data in production. Continue?')) {
+            if ($this->laravel->environment(['production', 'staging']) && ! $this->confirm('This deletes ALL data on this '.$this->laravel->environment().' server. Continue?')) {
                 return self::FAILURE;
             }
             $this->call('migrate:fresh', ['--force' => true]);

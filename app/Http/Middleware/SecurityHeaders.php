@@ -29,7 +29,12 @@ class SecurityHeaders
         // microphone=(self): Team chat voice notes, only our own pages may ask (the browser still asks the user).
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=()');
 
-        if (app()->isProduction() && $request->isSecure()) {
+        // Anything that isn't the live site must never show up in Google.
+        if (! app()->isProduction()) {
+            $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+        }
+
+        if (app()->environment(['production', 'staging']) && $request->isSecure()) {
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         }
 

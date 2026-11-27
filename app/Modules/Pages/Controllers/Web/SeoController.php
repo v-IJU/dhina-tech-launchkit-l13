@@ -21,7 +21,7 @@ class SeoController extends Controller
 
     public function robots(): Response
     {
-        $lines = setting('allow_indexing', true)
+        $lines = setting('allow_indexing', true) && app()->isProduction()
             ? ['User-agent: *', 'Disallow: /'.config('starter.admin_path').'/', 'Allow: /', '', 'Sitemap: '.url('/sitemap.xml')]
             : ['User-agent: *', 'Disallow: /'];
 

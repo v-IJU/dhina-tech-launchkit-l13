@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -117,7 +118,7 @@ class PermissionEscalationTest extends TestCase
         $manager->givePermissionTo(Permission::findOrCreate('users.import', 'web'));
         $this->helperRole();
         $admin = $this->userWithRole('admin');
-        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('users.csv', "First name,Email,Username,Role\n"
+        $file = UploadedFile::fake()->createWithContent('users.csv', "First name,Email,Username,Role\n"
             ."Ok,ok@example.com,okuser,helper\n"
             ."Boss,boss@example.com,bossuser,admin\n"
             ."Taken,{$admin->email},{$admin->username},helper\n");

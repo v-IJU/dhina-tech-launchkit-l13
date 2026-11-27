@@ -23,6 +23,12 @@ RUN install-php-extensions pdo_mysql redis gd intl zip bcmath pcntl opcache exif
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/zz-app.ini
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/zz-www.conf
+# Defaults for www.conf (compose.prod.yaml / .env override them; local dev uses these).
+ENV PHP_FPM_MAX_CHILDREN=12 \
+    PHP_FPM_START_SERVERS=3 \
+    PHP_FPM_MIN_SPARE=2 \
+    PHP_FPM_MAX_SPARE=6
 WORKDIR /var/www/html
 
 # ---------------------------------------------------------------- dev

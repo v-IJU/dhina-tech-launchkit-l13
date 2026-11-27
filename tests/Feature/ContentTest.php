@@ -117,6 +117,7 @@ class ContentTest extends TestCase
         Page::query()->create(['title' => 'About', 'slug' => 'about', 'status' => 'published', 'blocks' => []]);
 
         $this->get('/sitemap.xml')->assertOk()->assertHeader('Content-Type', 'application/xml')->assertSee(url('/about'), false);
+        $this->app['env'] = 'production';   // only the live site invites search engines (StagingTest covers the rest)
         $this->get('/robots.txt')->assertOk()->assertSee('Sitemap:');
     }
 }
